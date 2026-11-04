@@ -4,6 +4,10 @@ A disk usage viewer for macOS on Apple silicon, in the spirit of
 [Disk Inventory X](https://www.derlien.com/): a list of folders with their sizes next to a
 cushion treemap, where every file is a rectangle coloured by its kind.
 
+![Disk Inventory M with a list of folders and their sizes, a coloured treemap and a list of file kinds](docs/screenshot.png)
+
+*A demo disk of made-up files.*
+
 The last official release of Disk Inventory X dates from 2019 and is Intel only, so it runs through
 Rosetta. This is a new, native implementation, with an M for Apple's M chips. It shares no code or
 artwork with the original.
