@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:disk-inventory-m}",
+            "name": "Debug dim",
+            "target": "dim",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug dim"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:disk-inventory-m}",
+            "name": "Release dim",
+            "target": "dim",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release dim"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:disk-inventory-m}",
+            "name": "Debug DiskInventoryM",
+            "target": "DiskInventoryM",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug DiskInventoryM"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:disk-inventory-m}",
+            "name": "Release DiskInventoryM",
+            "target": "DiskInventoryM",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release DiskInventoryM"
+        }
+    ]
+}

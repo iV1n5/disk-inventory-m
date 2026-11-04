@@ -1,0 +1,18 @@
+# What a person sees first. {{OUT}} is a folder for pictures.
+
+# Starting without a folder offers the mounted volumes.
+wait 1
+snapshot {{OUT}}/10-volumes.png
+
+# Folders that macOS itself keeps closed lead to the banner about Full Disk Access.
+open /Library/Application Support
+wait-scan
+wait 0.8
+state
+expect banner=shown
+
+# The volume test left the window at this size, in an earlier run of the app.
+expect windowSize=900x600
+resize 1240 780
+wait 0.5
+snapshot {{OUT}}/11-privacy-banner.png

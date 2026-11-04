@@ -1,0 +1,18 @@
+# Quick Look shows the selected file. {{PROJECT}} is this repository.
+#
+# The panel only looks for its controller while the app is in front, and macOS doesn't let a test
+# insist on that. So the links in the chain are checked one by one, and the end result if possible.
+open {{PROJECT}}/Resources
+wait-scan
+wait 0.5
+select Info.plist
+expect selection=Info.plist
+expect-quicklook-wiring Info.plist
+menu File > Quick Look
+wait 1.5
+expect quickLook=shown
+expect-if-active quickLookController=this-window
+expect-if-active quickLookItem=Info.plist
+menu File > Quick Look
+wait 0.5
+expect quickLook=hidden

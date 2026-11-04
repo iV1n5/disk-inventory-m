@@ -1,0 +1,237 @@
+# Exercises the whole interface on a throwaway disk image. See Tests/UI/run.sh.
+# {{VOLUME}} is the mounted image, {{OUT}} a folder for pictures.
+
+open {{VOLUME}}
+wait-scan
+wait 0.8
+state
+expect zoomRoot=DIMTest
+expect layoutRoot=DIMTest
+expect selection=none
+expect free=yes
+expect other=yes
+expect banner=hidden
+expect-not tiles=0
+expect-disabled View > Zoom Out
+expect-disabled File > Move to Trash
+snapshot {{OUT}}/01-volume.png
+
+# The treemap and the list stay in step, from the list's side...
+select Projects/alpha/big.dat
+expect selection=big.dat
+expect-not outlineSelected=-1
+expect statusDetail=DAT_File,_9,4_MB
+expect-enabled File > Move to Trash
+expect-enabled View > Zoom In
+
+# ...and from the treemap's.
+click 0.02 0.02
+state
+expect selection=big.dat
+hover 0.02 0.02
+expect statusDetail=DAT_File,_9,4_MB
+
+# Moving up to the folder and zooming in on it.
+menu Edit > Select Parent Folder
+expect selection=alpha
+menu View > Zoom In
+wait 0.05
+snapshot {{OUT}}/02-zoom-animation.png
+wait 0.5
+expect zoomRoot=alpha
+expect layoutRoot=alpha
+expect tiles=2
+expect outlineRows=2
+expect zoomOutAvailable=yes
+expect-enabled View > Zoom Out
+snapshot {{OUT}}/03-zoomed.png
+
+menu View > Zoom Out
+wait 0.5
+expect zoomRoot=DIMTest
+expect layoutRoot=DIMTest
+expect zoomOutAvailable=no
+
+# Double clicks go one level deeper each.
+doubleclick 0.02 0.02
+wait 0.5
+expect zoomRoot=Projects
+doubleclick 0.02 0.02
+wait 0.5
+expect zoomRoot=alpha
+menu View > Zoom Out To > DIMTest
+wait 0.5
+expect zoomRoot=DIMTest
+expect zoomOutAvailable=no
+
+# The path bar jumps back up, too.
+doubleclick 0.02 0.02
+wait 0.5
+expect zoomRoot=Projects
+click-path 20
+wait 0.5
+expect zoomRoot=DIMTest
+
+# Display options.
+remember tiles
+menu View > Show Free Space
+wait 0.3
+expect free=no
+expect-changed tiles
+menu View > Show Other Space
+wait 0.3
+expect other=no
+snapshot {{OUT}}/04-without-free-space.png
+menu View > Show Free Space
+menu View > Show Other Space
+wait 0.3
+expect free=yes
+expect-same tiles
+
+remember rootSize
+menu View > Show Physical File Size
+wait 0.3
+expect physical=no
+expect-changed rootSize
+menu View > Show Physical File Size
+wait 0.3
+expect-same rootSize
+
+hover -1 -1
+select Sample.app
+expect statusDetail=Application,_2,1_MB
+menu View > Show Package Contents
+wait 0.3
+expect packages=yes
+select Sample.app/Contents/MacOS/Sample
+expect selection=Sample
+menu View > Show Package Contents
+wait 0.3
+expect packages=no
+expect selection=none
+
+# Zoomed in on a package, hiding package contents must not strand the view inside it.
+menu View > Show Package Contents
+wait 0.3
+select Sample.app
+menu View > Zoom In
+wait 0.5
+expect zoomRoot=Sample.app
+menu View > Show Package Contents
+wait 0.3
+expect zoomRoot=DIMTest
+expect zoomOutAvailable=no
+expect-not tiles=1
+
+# The list sorts by its column headers, without touching the treemap.
+remember tiles
+expect firstRow=Projects
+sort name ascending
+wait 0.2
+expect firstRow=Free_Space
+sort size ascending
+wait 0.2
+expect firstRow=Other_Space
+sort size descending
+wait 0.2
+expect firstRow=Projects
+expect-same tiles
+
+# The list and the treemap can sit above each other, too.
+menu View > Split Horizontally
+wait 0.4
+expect splitVertical=no
+expect-layout-matches
+snapshot {{OUT}}/04b-split-horizontally.png
+menu View > Split Horizontally
+wait 0.4
+expect splitVertical=yes
+expect-layout-matches
+
+# Highlighting a kind greys out everything else, without a new layout.
+remember tiles
+kind 0
+expect-not highlightedKind=none
+expect-same tiles
+snapshot {{OUT}}/05-kind-highlight.png
+kind -1
+expect highlightedKind=none
+
+# The file list, and searching.
+menu View > Selection List
+wait 0.4
+expect listHidden=no
+expect listRows=7
+snapshot {{OUT}}/06-selection-list.png
+find photo
+wait 0.3
+expect listRows=1
+find
+wait 0.3
+expect listRows=7
+menu View > Selection List
+wait 0.2
+expect listHidden=yes
+
+menu View > File Kind Statistics
+wait 0.2
+expect kindsHidden=yes
+menu View > File Kind Statistics
+wait 0.2
+expect kindsHidden=no
+
+menu View > Information
+wait 0.2
+expect infoVisible=yes
+select Media/movie.mov
+wait 0.2
+snapshot {{OUT}}/07-info.png
+menu View > Information
+
+# Right clicking selects what is under the pointer and offers what can be done with it.
+context-menu 0.02 0.02
+expect selection=big.dat
+
+# Moving to the Trash takes the file away, and gives the space back to the display.
+select Throwaway/delete-me.log
+remember rootSize
+remember tiles
+menu File > Move to Trash
+wait-for selection=Throwaway
+wait 0.5
+expect-changed rootSize
+run test ! -e {{VOLUME}}/Throwaway/delete-me.log && echo gone > {{OUT}}/trash-result.txt
+snapshot {{OUT}}/08-after-trash.png
+
+# A refresh notices what changed on disk.
+remember rootSize
+run dd if=/dev/urandom of={{VOLUME}}/Throwaway/new-file.bin bs=1m count=3 2>/dev/null
+select Throwaway
+menu File > Refresh Selection
+wait 0.8
+expect-changed rootSize
+select Throwaway/new-file.bin
+expect selection=new-file.bin
+
+remember rootSize
+run rm {{VOLUME}}/Throwaway/new-file.bin
+menu File > Refresh All
+wait 0.3
+wait-scan
+wait 0.8
+expect-changed rootSize
+expect zoomRoot=DIMTest
+expect selection=none
+
+# The picture follows the window's size.
+resize 900 600
+wait 0.8
+state
+expect-layout-matches
+snapshot {{OUT}}/09-resized.png
+
+# Sorting by name and the like must leave everything intact.
+menu Edit > Find…
+menu File > Open Recent > mnt
+wait 0.3
+expect zoomRoot=DIMTest
