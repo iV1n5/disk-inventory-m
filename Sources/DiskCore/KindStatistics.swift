@@ -92,41 +92,68 @@ extension FileTree {
     }
 }
 
+/// The ways of colouring kinds.
+public enum MapColors: String, Sendable, CaseIterable {
+    /// The system's colours, from the largest kind down.
+    case system
+    /// By what files are: video is blue on every disk.
+    case families
+}
+
 /// The colours kinds are drawn in.
 public enum KindPalette {
-    /// Six strong colours, then six softer versions, for the largest kinds.
-    private static let distinct: [SIMD3<Float>] = [
-        SIMD3(0.17, 0.27, 0.95),  // blue
-        SIMD3(0.92, 0.13, 0.15),  // red
-        SIMD3(0.10, 0.78, 0.20),  // green
-        SIMD3(0.00, 0.80, 0.85),  // cyan
-        SIMD3(0.85, 0.10, 0.85),  // magenta
-        SIMD3(0.93, 0.85, 0.08),  // yellow
-        SIMD3(0.42, 0.45, 0.80),
-        SIMD3(0.80, 0.42, 0.42),
-        SIMD3(0.42, 0.72, 0.45),
-        SIMD3(0.38, 0.70, 0.72),
-        SIMD3(0.72, 0.42, 0.72),
-        SIMD3(0.75, 0.72, 0.40),
+    /// One hue per family, in steps of lightness, so that the kinds of a family stay apart without
+    /// leaving it. They come from OKLCH, which keeps the steps even to the eye.
+    private static let familyShades: [KindFamily: [UInt32]] = [
+        .video: [0x2A80E2, 0x4C9FFF, 0x69BDFF, 0x0267C7, 0x7CD0FF],
+        .image: [0x00A062, 0x48CD8C, 0x008145, 0x67E8A5, 0x2EBA7A],
+        .audio: [0x9E66D7, 0xC48CFF, 0xE1A9FF, 0x864EBC, 0xB179EB],
+        .archive: [0xDD7B2B, 0xF99549, 0xC26300, 0xFFAE64, 0xAE5000],
+        .application: [0xEC5482, 0xCF386B, 0xFF6E9B],
+        .document: [0xE5C95E, 0xF2D76C, 0xD1B64A, 0xD8BD51, 0xC5A93B, 0xF9DD73],
+        .data: [0x5B798B, 0x7897AA, 0x446274, 0x90B0C4, 0x6C8B9E, 0x4F6D7F, 0x84A4B7, 0x607F91],
     ]
-    private static let remaining = SIMD3<Float>(0.60, 0.60, 0.60)
-    private static let freeSpace = SIMD3<Float>(0.70, 0.70, 0.68)
-    private static let otherSpace = SIMD3<Float>(0.32, 0.32, 0.34)
+    /// macOS's own colours, for the largest kinds.
+    private static let systemColors: [UInt32] = [
+        0x0A84FF, 0xFF9F0A, 0x30D158, 0x5E5CE6, 0xFFD60A, 0xFF375F,
+        0x40C8E0, 0xBF5AF2, 0x66D4CF, 0xFF453A, 0xAC8E68, 0x64D2FF,
+    ]
+    private static let remaining: UInt32 = 0x77777D
+    private static let freeSpace: UInt32 = 0xB3B3AD
+    private static let otherSpace: UInt32 = 0x525257
+
+    private static func color(_ hex: UInt32) -> SIMD4<Float> {
+        SIMD4(Float((hex >> 16) & 255) / 255, Float((hex >> 8) & 255) / 255, Float(hex & 255) / 255, 1)
+    }
 
     /// A colour for every kind of the table, given the kinds sorted by importance.
-    public static func colors(for statistics: [KindStatistic], table: KindTable) -> [SIMD4<Float>] {
-        var colors = [SIMD4<Float>](
-            repeating: SIMD4(remaining, 1),
-            count: table.kinds.count
-        )
-        var next = 0
-        for statistic in statistics where next < distinct.count {
-            if statistic.kind == table.freeSpace || statistic.kind == table.otherSpace { continue }
-            colors[Int(statistic.kind)] = SIMD4(distinct[next], 1)
-            next += 1
+    public static func colors(
+        for statistics: [KindStatistic],
+        table: KindTable,
+        scheme: MapColors = .system
+    ) -> [SIMD4<Float>] {
+        let shown = statistics.filter { $0.kind != table.freeSpace && $0.kind != table.otherSpace }
+        var colors: [SIMD4<Float>]
+        switch scheme {
+        case .families:
+            colors = table.kinds.map { color(familyShades[$0.family]?.first ?? remaining) }
+            // Within a family, the largest kind gets the first shade.
+            var used: [KindFamily: Int] = [:]
+            for statistic in shown {
+                let family = table.kinds[Int(statistic.kind)].family
+                guard let shades = familyShades[family] else { continue }
+                let step = used[family, default: 0]
+                colors[Int(statistic.kind)] = color(shades[step % shades.count])
+                used[family] = step + 1
+            }
+        case .system:
+            colors = [SIMD4<Float>](repeating: color(remaining), count: table.kinds.count)
+            for (statistic, hex) in zip(shown, systemColors) {
+                colors[Int(statistic.kind)] = color(hex)
+            }
         }
-        colors[Int(table.freeSpace)] = SIMD4(freeSpace, 1)
-        colors[Int(table.otherSpace)] = SIMD4(otherSpace, 1)
+        colors[Int(table.freeSpace)] = color(freeSpace)
+        colors[Int(table.otherSpace)] = color(otherSpace)
         return colors
     }
 }

@@ -8,8 +8,13 @@ state
 expect zoomRoot=DIMTest
 expect layoutRoot=DIMTest
 expect selection=none
-expect free=yes
-expect other=yes
+expect free=no
+expect other=no
+expect kindsHidden=yes
+expect listHidden=yes
+expect searchVisible=no
+expect toolbar=hidden
+expect mapColors=system
 expect banner=hidden
 expect-not tiles=0
 expect-disabled View > Zoom Out
@@ -72,20 +77,46 @@ click-path 20
 wait 0.5
 expect zoomRoot=DIMTest
 
-# Display options.
+# The toolbar stays out of the way until someone asks for it.
+menu View > Show Toolbar
+wait 0.4
+expect toolbar=shown
+expect-layout-matches
+snapshot {{OUT}}/03b-toolbar.png
+menu View > Show Toolbar
+wait 0.4
+expect toolbar=hidden
+expect-layout-matches
+
+# Both sets of colours are there, and switching needs no new layout.
+remember tiles
+remember kindColors
+menu View > Map Colors > Families
+wait 0.3
+expect mapColors=families
+expect-changed kindColors
+expect-same tiles
+snapshot {{OUT}}/03c-family-colors.png
+menu View > Map Colors > System
+wait 0.3
+expect mapColors=system
+expect-same kindColors
+
+# Display options. Free and other space start out hidden.
 remember tiles
 menu View > Show Free Space
 wait 0.3
-expect free=no
+expect free=yes
 expect-changed tiles
 menu View > Show Other Space
 wait 0.3
-expect other=no
-snapshot {{OUT}}/04-without-free-space.png
+expect other=yes
+snapshot {{OUT}}/04-with-free-space.png
 menu View > Show Free Space
 menu View > Show Other Space
 wait 0.3
-expect free=yes
+expect free=no
+expect other=no
 expect-same tiles
 
 remember rootSize
@@ -124,6 +155,9 @@ expect zoomOutAvailable=no
 expect-not tiles=1
 
 # The list sorts by its column headers, without touching the treemap.
+menu View > Show Free Space
+menu View > Show Other Space
+wait 0.3
 remember tiles
 expect firstRow=Projects
 sort name ascending
@@ -136,6 +170,9 @@ sort size descending
 wait 0.2
 expect firstRow=Projects
 expect-same tiles
+menu View > Show Free Space
+menu View > Show Other Space
+wait 0.3
 
 # The list and the treemap can sit above each other, too.
 menu View > Split Horizontally
@@ -161,6 +198,7 @@ expect highlightedKind=none
 menu View > Selection List
 wait 0.4
 expect listHidden=no
+expect searchVisible=yes
 expect listRows=7
 snapshot {{OUT}}/06-selection-list.png
 find photo
@@ -172,13 +210,26 @@ expect listRows=7
 menu View > Selection List
 wait 0.2
 expect listHidden=yes
+expect searchVisible=no
+
+# Looking for something opens the list the search field lives in.
+menu Edit > Find…
+wait 0.4
+expect listHidden=no
+expect searchVisible=yes
+menu View > Selection List
+wait 0.2
+expect listHidden=yes
 
 menu View > File Kind Statistics
-wait 0.2
-expect kindsHidden=yes
-menu View > File Kind Statistics
-wait 0.2
+wait 0.3
 expect kindsHidden=no
+expect-layout-matches
+snapshot {{OUT}}/06b-kinds.png
+menu View > File Kind Statistics
+wait 0.3
+expect kindsHidden=yes
+expect-layout-matches
 
 menu View > Information
 wait 0.2
@@ -223,6 +274,13 @@ expect-changed rootSize
 expect zoomRoot=DIMTest
 expect selection=none
 
+# A solid outline means that rectangle is the selection. What is too small for one gets a ring.
+select Media
+expect outline=solid
+select .Trashes
+expect selection=.Trashes
+expect outline=ring
+
 # The picture follows the window's size.
 resize 900 600
 wait 0.8
@@ -231,7 +289,6 @@ expect-layout-matches
 snapshot {{OUT}}/09-resized.png
 
 # Sorting by name and the like must leave everything intact.
-menu Edit > Find…
 menu File > Open Recent > mnt
 wait 0.3
 expect zoomRoot=DIMTest

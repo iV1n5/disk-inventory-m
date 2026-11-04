@@ -12,7 +12,7 @@ public struct TreemapTile: Sendable {
 /// How pronounced the cushions look. See "Cushion Treemaps" (van Wijk, van de Wetering, 1999).
 public struct CushionParameters: Sendable {
     /// The ridge height of the outermost level.
-    public var height = 0.34
+    public var height = 0.22
     /// How much lower each deeper level's ridge is.
     public var falloff = 0.90
 
@@ -31,6 +31,10 @@ struct TreemapEntry {
     var childCount: Int32 = 0
     /// True for an entry standing in for a folder's many children too small to draw.
     var isRemainder = false
+
+    var rect: PixelRect {
+        PixelRect(x0: Int(x0), y0: Int(y0), x1: Int(x1), y1: Int(y1))
+    }
 }
 
 /// A pixel rectangle with its origin at the top left.
@@ -100,10 +104,7 @@ public final class TreemapLayout: @unchecked Sendable {
                 let e = entries[child]
                 return x >= e.x0 && x < e.x1 && y >= e.y0 && y < e.y1
             }
-            guard let next else {
-                let rect = PixelRect(x0: Int(entry.x0), y0: Int(entry.y0), x1: Int(entry.x1), y1: Int(entry.y1))
-                return (entry.node, rect)
-            }
+            guard let next else { return (entry.node, entry.rect) }
             index = next
         }
     }
@@ -112,16 +113,29 @@ public final class TreemapLayout: @unchecked Sendable {
     public func rect(of node: NodeID) -> (node: NodeID, rect: PixelRect)? {
         var current = node
         while current != FileTree.noNode {
-            if let entry = entries.first(where: { $0.node == current }) {
-                let rect = PixelRect(
-                    x0: Int(entry.x0), y0: Int(entry.y0), x1: Int(entry.x1), y1: Int(entry.y1)
-                )
-                return (current, rect)
-            }
+            if let entry = entries.first(where: { $0.node == current }) { return (current, entry.rect) }
             if current == root { return nil }
             current = tree.node(current).parent
         }
         return nil
+    }
+
+    /// Where to point at a node. Something too small for a rectangle of its own is not the whole of
+    /// its nearest visible folder, so this leads to the smallest thing drawn that holds it.
+    /// `isExact` tells whether the rectangle is the node's own.
+    public func location(of node: NodeID) -> (rect: PixelRect, isExact: Bool)? {
+        guard let found = rect(of: node) else { return nil }
+        if found.node == node { return (found.rect, true) }
+        guard let holder = entries.first(where: { $0.node == found.node }), holder.childCount > 0 else {
+            return (found.rect, false)
+        }
+        let first = Int(holder.firstChild)
+        if let remainder = entries[first..<(first + Int(holder.childCount))].first(where: \.isRemainder) {
+            return (remainder.rect, false)
+        }
+        // Not even a pixel was left over for it. Layout ends at the bottom right, so that's its place.
+        let corner = PixelRect(x0: found.rect.x1 - 1, y0: found.rect.y1 - 1, x1: found.rect.x1, y1: found.rect.y1)
+        return (corner, false)
     }
 }
 

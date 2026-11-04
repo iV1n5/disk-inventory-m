@@ -54,11 +54,26 @@ SIGN_IDENTITY="My Certificate" scripts/build-app.sh
 | Reveal in Finder / Quick Look | ⇧⌘F / Space |
 | Move to Trash | ⌘⌫ |
 | Scan again | ⌘R for everything, ⇧⌘R for the selected folder |
+| Show the kinds panel | ⌥⌘K |
 | Highlight one kind of file | Click it in the kinds panel |
 | List all files of a kind | Double-click it in the kinds panel |
-| Find by name | ⌘F |
+| Show the list of files | ⌥⌘L |
+| Find by name | ⌘F, in the list of files |
+| Show the toolbar | ⌥⌘T |
+| Change the map's colours | View > Map Colors |
 
-The keyboard shortcuts follow the original where it had them.
+A solid outline in the map means that rectangle is what you selected. Anything too small for that
+is marked in its place instead: with a dashed outline around the small files it is among, or with a
+ring if even they take up next to no room.
+
+The keyboard shortcuts follow the original where it had them. The window starts out with just the
+folders and the map: the toolbar, the kinds panel, free space and other space are all in the View
+menu.
+
+There are two sets of colours. System uses macOS's own colours, from the largest kind of file down.
+With Families, a colour says what a file is, and it stays the same on every disk: blue for video,
+green for images, purple for audio, orange for archives and disk images, pink for applications,
+yellow for documents and slate for everything else.
 
 ## How it works
 
@@ -67,7 +82,7 @@ The keyboard shortcuts follow the original where it had them.
 | Scanner | `Sources/DiskCore/DiskScanner.swift` | Reads directories with `getattrlistbulk(2)` on all cores. Counts hard links once and stops at mount points. |
 | File tree | `Sources/DiskCore/FileTree.swift` | 48 bytes per file in flat arenas, addressed by index. Nothing moves, and there is no reference counting per file. |
 | Treemap layout | `Sources/DiskCore/TreemapLayout.swift` | Squarified layout (Bruls, Huizing, van Wijk). Merges anything below a pixel, so its cost follows the pixels on screen rather than the number of files. |
-| Rendering | `Sources/TreemapMetal/TreemapRenderer.swift` | Cushion shading (van Wijk, van de Wetering) in a Metal fragment shader. The shader compiles at launch, so no Metal toolchain is needed to build. |
+| Rendering | `Sources/TreemapMetal/TreemapRenderer.swift` | Cushion shading (van Wijk, van de Wetering) in a Metal fragment shader, which also rounds large tiles and sets them apart. The shader compiles at launch, so no Metal toolchain is needed to build. |
 | Interface | `Sources/DiskInventoryM/` | AppKit, written in code. `NSOutlineView` copes with folders of any size. |
 | `dim` | `Sources/dim/` | Command line companion: `dim scan <path>`, `dim render <path> <out.png>`. |
 
@@ -90,8 +105,8 @@ Sizes match `du` to the kilobyte on every folder compared.
 
 ## Differences from Disk Inventory X
 
-New: a Metal renderer, parallel scanning, the share-of-folder column, Quick Look, search by name,
-highlighting a kind in the treemap, and a banner explaining missing folders.
+New: a Metal renderer, parallel scanning, colours by family, the share-of-folder column, Quick Look,
+search by name, highlighting a kind in the treemap, and a banner explaining missing folders.
 
 Not carried over: the Finder plugin, syncing the selection with a Finder window, the "Open With"
 submenu, creator codes (which macOS stopped using long ago), and sharing colours between windows.

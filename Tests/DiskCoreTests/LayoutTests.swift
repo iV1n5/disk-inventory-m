@@ -128,6 +128,39 @@ import TreemapMetal
         #expect(visible.node != files[1])
     }
 
+    @Test func somethingTooSmallIsNotTheWholeOfItsFolder() throws {
+        let builder = SyntheticTree()
+        let folders = builder.add(to: 0, [("folder", nil), ("other", 1_000_000)])
+        // Too small for a rectangle each, but enough for one between them.
+        let specks = (0..<2000).map { ("speck\($0)", UInt64?(100)) }
+        let files = builder.add(to: folders[0], [("big", 1_000_000)] + specks)
+        let tree = builder.finish()
+        let layout = TreemapLayout(tree: tree, root: 0, options: DisplayOptions(), width: 100, height: 100)
+
+        let folder = try #require(layout.rect(of: folders[0])).rect
+        let speck = try #require(layout.location(of: files[5]))
+        #expect(!speck.isExact)
+        #expect(speck.rect.width * speck.rect.height < folder.width * folder.height / 2)
+        #expect(speck.rect.x0 >= folder.x0 && speck.rect.x1 <= folder.x1)
+        #expect(speck.rect.y0 >= folder.y0 && speck.rect.y1 <= folder.y1)
+        #expect(layout.location(of: files[0])?.isExact == true)
+        #expect(layout.location(of: folders[0])?.isExact == true)
+    }
+
+    @Test func somethingWithNoRoomLeftGoesToTheEndOfItsFolder() throws {
+        let builder = SyntheticTree()
+        let folders = builder.add(to: 0, [("huge", 1_000_000_000), ("folder", nil)])
+        let files = builder.add(to: folders[1], [("big", 500_000_000), ("empty", 0)])
+        let tree = builder.finish()
+        let layout = TreemapLayout(tree: tree, root: 0, options: DisplayOptions(), width: 400, height: 300)
+
+        let folder = try #require(layout.rect(of: folders[1])).rect
+        let empty = try #require(layout.location(of: files[1]))
+        #expect(!empty.isExact)
+        #expect(empty.rect.width == 1 && empty.rect.height == 1)
+        #expect(empty.rect.x1 == folder.x1 && empty.rect.y1 == folder.y1)
+    }
+
     @Test func emptyTreesProduceNothing() throws {
         let folder = try TemporaryFolder()
         let tree = try DiskScanner(path: folder.path).run()
@@ -191,11 +224,26 @@ import TreemapMetal
         let image = try renderer.makeImage(layout, colors: colors)
 
         let center = pixel(image, x: 100, y: 100)
-        let corner = pixel(image, x: 197, y: 197)
+        let corner = pixel(image, x: 188, y: 188)
         #expect(center.b > corner.b, "a cushion is brightest around its middle")
         #expect(center.b > 200)
-        #expect(corner.r == 0 && corner.g == 0, "away from the highlight it stays the pure colour")
-        #expect(center.r > 0, "the highlight washes out towards white")
+        #expect(center.r > corner.r, "the highlight washes out towards white, most of all in the middle")
+        #expect(center.r < 64, "gently: the colour stays recognisable")
+        let outside = pixel(image, x: 0, y: 0)
+        #expect(outside.b < 40, "a large tile has rounded corners, with the background showing")
+    }
+
+    @Test func smallTilesGoWithoutGapsAndRounding() throws {
+        let builder = SyntheticTree()
+        builder.add(to: 0, [("only", 1000)])
+        let tree = builder.finish()
+        let layout = TreemapLayout(tree: tree, root: 0, options: DisplayOptions(), width: 8, height: 8)
+        var colors = [SIMD4<Float>](repeating: SIMD4(0, 0, 0, 1), count: tree.kindTable.kinds.count)
+        colors[Int(tree.kind(of: tree.find("only")!))] = SIMD4(0, 0, 1, 1)
+
+        let image = try TreemapRenderer().makeImage(layout, colors: colors)
+
+        #expect(pixel(image, x: 0, y: 0).b > 100, "or a folder of many small files would turn into dots")
     }
 
     @Test func eachTileUsesTheColorOfItsKind() throws {
@@ -226,18 +274,44 @@ import TreemapMetal
 }
 
 @Suite struct PaletteTests {
-    @Test func givesTheLargestKindsDistinctColorsAndTheRestGrey() throws {
+    @Test func systemColorsGoToTheLargestKindsAndTheRestIsGrey() throws {
         let folder = try TemporaryFolder()
         for index in 0..<16 {
             try folder.write("file.ext\(Character(UnicodeScalar(UInt8(97 + index))))", bytes: (index + 1) * 10_000)
         }
         let tree = try DiskScanner(path: folder.path).run()
         let statistics = tree.kindStatistics(DisplayOptions())
-        let colors = KindPalette.colors(for: statistics, table: tree.kindTable)
+        let colors = KindPalette.colors(for: statistics, table: tree.kindTable, scheme: .system)
 
         #expect(statistics.count == 16)
         let shades = statistics.map { colors[Int($0.kind)] }
         #expect(Set(shades.prefix(12).map { "\($0)" }).count == 12)
         #expect(Set(shades.suffix(4).map { "\($0)" }).count == 1)
+    }
+
+    /// The point of families: what a kind looks like doesn't depend on what else is on the disk.
+    @Test func aFamilyKeepsItsColourWhateverElseIsOnTheDisk() throws {
+        func colorOfMovie(besides others: [(String, Int)]) throws -> SIMD4<Float> {
+            let folder = try TemporaryFolder()
+            try folder.write("clip.mov", bytes: 50_000)
+            for (name, size) in others { try folder.write(name, bytes: size) }
+            let tree = try DiskScanner(path: folder.path).run()
+            let colors = KindPalette.colors(for: tree.kindStatistics(DisplayOptions()), table: tree.kindTable, scheme: .families)
+            return colors[Int(tree.kind(of: try tree.id("clip.mov")))]
+        }
+        let alone = try colorOfMovie(besides: [])
+        let withLargerFiles = try colorOfMovie(besides: [("photo.jpg", 900_000), ("backup.zip", 700_000)])
+        #expect(alone == withLargerFiles)
+    }
+
+    @Test func kindsOfAFamilyDifferInShade() throws {
+        let folder = try TemporaryFolder()
+        try folder.write("clip.mov", bytes: 90_000)
+        try folder.write("clip.mp4", bytes: 50_000)
+        let tree = try DiskScanner(path: folder.path).run()
+        let colors = KindPalette.colors(for: tree.kindStatistics(DisplayOptions()), table: tree.kindTable, scheme: .families)
+        let first = colors[Int(tree.kind(of: try tree.id("clip.mov")))]
+        let second = colors[Int(tree.kind(of: try tree.id("clip.mp4")))]
+        #expect(first != second)
     }
 }

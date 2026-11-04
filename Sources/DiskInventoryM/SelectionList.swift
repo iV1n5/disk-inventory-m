@@ -5,6 +5,7 @@ import DiskCore
 protocol SelectionListDelegate: AnyObject {
     func selectionList(didSelect node: NodeID)
     func selectionList(didChooseKind kind: KindID?)
+    func selectionList(didSearchFor query: String)
     func selectionListMenu() -> NSMenu?
 }
 
@@ -38,6 +39,7 @@ final class SelectionListController: NSObject, NSTableViewDataSource, NSTableVie
     }
 
     let view = NSView()
+    let searchField = NSSearchField()
     weak var delegate: SelectionListDelegate?
 
     private let tableView = SelectionTableView()
@@ -93,7 +95,15 @@ final class SelectionListController: NSObject, NSTableViewDataSource, NSTableVie
         kindPopup.target = self
         kindPopup.action = #selector(kindChosen)
 
-        for subview in [caption, kindPopup, countLabel, scrollView] as [NSView] {
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.controlSize = .small
+        searchField.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        searchField.placeholderString = "Find by Name"
+        searchField.sendsWholeSearchString = true
+        searchField.target = self
+        searchField.action = #selector(searchChanged)
+
+        for subview in [caption, kindPopup, countLabel, searchField, scrollView] as [NSView] {
             view.addSubview(subview)
         }
         NSLayoutConstraint.activate([
@@ -103,13 +113,20 @@ final class SelectionListController: NSObject, NSTableViewDataSource, NSTableVie
             kindPopup.topAnchor.constraint(equalTo: view.topAnchor, constant: 5),
             kindPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
             countLabel.leadingAnchor.constraint(greaterThanOrEqualTo: kindPopup.trailingAnchor, constant: 10),
-            countLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            countLabel.trailingAnchor.constraint(equalTo: searchField.leadingAnchor, constant: -10),
             countLabel.centerYAnchor.constraint(equalTo: kindPopup.centerYAnchor),
+            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            searchField.centerYAnchor.constraint(equalTo: kindPopup.centerYAnchor),
+            searchField.widthAnchor.constraint(equalToConstant: 200),
             scrollView.topAnchor.constraint(equalTo: kindPopup.bottomAnchor, constant: 5),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+    }
+
+    @objc private func searchChanged() {
+        delegate?.selectionList(didSearchFor: searchField.stringValue)
     }
 
     @objc private func kindChosen() {

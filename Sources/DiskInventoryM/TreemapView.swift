@@ -37,6 +37,10 @@ final class TreemapView: NSView {
         static let duration: CFTimeInterval = 0.28
     }
 
+    /// Below this size in points, an outline is hard to tell from its own line.
+    private static let smallestOutline: CGFloat = 10
+    private static let ringRadius: CGFloat = 13
+
     weak var delegate: TreemapViewDelegate?
     var animatesZooming = true
 
@@ -99,7 +103,10 @@ final class TreemapView: NSView {
 
         for outline in [hoverLayer, selectionLayer] {
             outline.fillColor = nil
-            outline.actions = ["path": NSNull(), "hidden": NSNull(), "position": NSNull(), "bounds": NSNull()]
+            outline.actions = [
+                "path": NSNull(), "hidden": NSNull(), "position": NSNull(), "bounds": NSNull(),
+                "lineDashPattern": NSNull(),
+            ]
             host.addSublayer(outline)
         }
         selectionLayer.strokeColor = NSColor.systemYellow.cgColor
@@ -139,6 +146,15 @@ final class TreemapView: NSView {
         if transition != .none { pendingTransition = transition }
         requestLayout()
     }
+
+    #if UITEST
+    var uiColorSummary: String { colors.map { "\($0.x)/\($0.y)/\($0.z)" }.joined(separator: ",") }
+    var uiOutline: String {
+        guard let path = selectionLayer.path else { return "none" }
+        if path.boundingBoxOfPath.width == Self.ringRadius * 2 { return "ring" }
+        return selectionLayer.lineDashPattern == nil ? "solid" : "dashed"
+    }
+    #endif
 
     func setColors(_ colors: [SIMD4<Float>]) {
         self.colors = colors
@@ -279,7 +295,7 @@ final class TreemapView: NSView {
         }
         renderer.encode(
             layers, palette: palette, into: commandBuffer, target: drawable.texture,
-            background: MTLClearColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1)
+            pixelsPerPoint: Float(pixelScale)
         )
         commandBuffer.present(drawable)
         commandBuffer.commit()
@@ -379,12 +395,50 @@ final class TreemapView: NSView {
         return CGPath(rect: frame.insetBy(dx: inset, dy: inset), transform: nil)
     }
 
+    /// A solid outline means this rectangle is the selection and nothing else. Anything smaller gets
+    /// marked in its place, rather than by outlining a folder it is merely a part of: with a dashed
+    /// outline where there is an area to show, and with a ring where there isn't.
     private func updateSelectionOutline() {
-        guard let selectedNode, let layout = treemapLayout, let found = layout.rect(of: selectedNode) else {
+        guard let selectedNode, let layout = treemapLayout, let found = layout.location(of: selectedNode) else {
             selectionLayer.path = nil
             return
         }
-        selectionLayer.path = path(for: found.rect, inset: 1)
+        let smallest = Int((Self.smallestOutline * pixelScale).rounded())
+        if found.rect.width < smallest, found.rect.height < smallest {
+            selectionLayer.lineDashPattern = nil
+            selectionLayer.path = ring(around: found.rect)
+        } else {
+            let visible = stretched(found.rect, to: smallest, in: layout)
+            selectionLayer.lineDashPattern = found.isExact && visible == found.rect ? nil : [4, 3]
+            selectionLayer.path = path(for: visible, inset: 1)
+        }
+    }
+
+    /// The map is all rectangles, so a ring is what the eye finds on it.
+    private func ring(around rect: PixelRect) -> CGPath {
+        let radius = Self.ringRadius
+        let x = CGFloat(rect.x0 + rect.x1) / 2 / pixelScale
+        let y = CGFloat(rect.y0 + rect.y1) / 2 / pixelScale
+        let center = CGPoint(
+            x: min(max(x, radius + 2), max(bounds.width - radius - 2, radius + 2)),
+            y: min(max(y, radius + 2), max(bounds.height - radius - 2, radius + 2))
+        )
+        let path = CGMutablePath()
+        path.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+        path.addEllipse(in: CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6))
+        return path
+    }
+
+    /// A long thin tile would vanish under its own outline, so it gets some room.
+    private func stretched(_ rect: PixelRect, to smallest: Int, in layout: TreemapLayout) -> PixelRect {
+        func stretch(_ low: Int, _ high: Int, limit: Int) -> (low: Int, high: Int) {
+            guard high - low < smallest else { return (low, high) }
+            let start = min(max((low + high - smallest) / 2, 0), max(limit - smallest, 0))
+            return (start, min(start + smallest, limit))
+        }
+        let x = stretch(rect.x0, rect.x1, limit: layout.width)
+        let y = stretch(rect.y0, rect.y1, limit: layout.height)
+        return PixelRect(x0: x.low, y0: y.low, x1: x.high, y1: y.high)
     }
 
     // MARK: Mouse

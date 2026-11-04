@@ -2,9 +2,15 @@ import Foundation
 import Synchronization
 import UniformTypeIdentifiers
 
+/// What a kind of file is for. Colours can go by this, so that video looks the same on every disk.
+public enum KindFamily: Int, Sendable, CaseIterable {
+    case video, image, audio, archive, application, document, data
+}
+
 /// A human-readable category of file, like "PNG image".
 public struct FileKind: Sendable, Hashable {
     public let name: String
+    public let family: KindFamily
 }
 
 /// Extension identifiers with a fixed meaning. Real extensions are numbered after these.
@@ -76,7 +82,7 @@ public struct KindTable: Sendable {
             "Other Space",
         ]
         for name in reserved {
-            kindOfExtension.append(intern(name))
+            kindOfExtension.append(intern(name, family: .data))
             extensionIsPackage.append(false)
         }
         folder = kindOfExtension[Int(ReservedExtension.folder)]
@@ -84,11 +90,11 @@ public struct KindTable: Sendable {
         otherSpace = kindOfExtension[Int(ReservedExtension.otherSpace)]
     }
 
-    private mutating func intern(_ name: String) -> KindID {
+    private mutating func intern(_ name: String, family: KindFamily) -> KindID {
         if let id = kindIDsByName[name] { return id }
         guard kinds.count < Int(KindID.max) else { return 0 }
         let id = KindID(kinds.count)
-        kinds.append(FileKind(name: name))
+        kinds.append(FileKind(name: name, family: family))
         kindIDsByName[name] = id
         return id
     }
@@ -99,7 +105,7 @@ public struct KindTable: Sendable {
         let pending = Array(names[resolvedExtensions...])
         let results = Self.classify(pending)
         for result in results {
-            kindOfExtension.append(intern(result.kind))
+            kindOfExtension.append(intern(result.kind, family: result.family))
             extensionIsPackage.append(result.isPackage)
         }
         resolvedExtensions = names.count
@@ -114,7 +120,23 @@ public struct KindTable: Sendable {
         description.prefix(1).uppercased() + description.dropFirst()
     }
 
-    private static func classify(_ names: [String]) -> [(kind: String, isPackage: Bool)] {
+    /// The order matters: an Office document is also a zip archive, and source code is also text.
+    private static func family(of type: UTType) -> KindFamily {
+        func isAny(_ types: UTType...) -> Bool { types.contains { type.conforms(to: $0) } }
+        if isAny(.audio) { return .audio }
+        if isAny(.movie, .audiovisualContent) { return .video }
+        if isAny(.image) { return .image }
+        if isAny(.application, .applicationBundle) { return .application }
+        if isAny(.sourceCode, .script, .json, .xml, .propertyList, .commaSeparatedText, .tabSeparatedText, .log) {
+            return .data
+        }
+        if isAny(.compositeContent, .presentation, .spreadsheet, .pdf, .epub, .emailMessage, .text) { return .document }
+        if isAny(.archive, .diskImage) { return .archive }
+        // Installers can be bundles, which macOS doesn't count as archives. To a person they are one.
+        return type.identifier.hasPrefix("com.apple.installer-") ? .archive : .data
+    }
+
+    private static func classify(_ names: [String]) -> [Classification] {
         let results = ClassificationResults(count: names.count)
         DispatchQueue.concurrentPerform(iterations: names.count) { index in
             let name = names[index]
@@ -122,24 +144,33 @@ public struct KindTable: Sendable {
             // The lookup only considers types conforming to what it is told, and by default that
             // is plain data, which packages are not. So they take a lookup of their own.
             if let package = UTType(filenameExtension: name, conformingTo: .package), !package.isDynamic {
-                results.store((describe(package, fallback: fallback), true), at: index)
+                let kind = describe(package, fallback: fallback)
+                results.store(Classification(kind: kind, isPackage: true, family: family(of: package)), at: index)
             } else if let type = UTType(filenameExtension: name), !type.isDynamic {
-                results.store((describe(type, fallback: fallback), false), at: index)
+                let kind = describe(type, fallback: fallback)
+                results.store(Classification(kind: kind, isPackage: false, family: family(of: type)), at: index)
             } else {
-                results.store((fallback, false), at: index)
+                results.store(Classification(kind: fallback, isPackage: false, family: .data), at: index)
             }
         }
         return results.values
     }
 }
 
+/// What is known about an extension.
+private struct Classification {
+    var kind = ""
+    var isPackage = false
+    var family = KindFamily.data
+}
+
 /// Lets `concurrentPerform` iterations write to distinct slots of one buffer.
 private final class ClassificationResults: @unchecked Sendable {
-    private let buffer: UnsafeMutableBufferPointer<(kind: String, isPackage: Bool)>
+    private let buffer: UnsafeMutableBufferPointer<Classification>
 
     init(count: Int) {
         buffer = .allocate(capacity: count)
-        buffer.initialize(repeating: ("", false))
+        buffer.initialize(repeating: Classification())
     }
 
     deinit {
@@ -147,11 +178,11 @@ private final class ClassificationResults: @unchecked Sendable {
         buffer.deallocate()
     }
 
-    func store(_ value: (kind: String, isPackage: Bool), at index: Int) {
+    func store(_ value: Classification, at index: Int) {
         buffer[index] = value
     }
 
-    var values: [(kind: String, isPackage: Bool)] {
+    var values: [Classification] {
         Array(buffer)
     }
 }

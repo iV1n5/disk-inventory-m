@@ -100,6 +100,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         preferencesWindow?.showWindow(nil)
     }
 
+    /// Colours apply at once, to every window: they are a matter of taste rather than of what a
+    /// particular scan is for.
+    @objc func chooseMapColors(_ sender: NSMenuItem) {
+        guard let scheme = sender.representedObject as? String else { return }
+        UserDefaults.standard.set(scheme, forKey: Preferences.mapColors)
+        for window in scanWindows { window.mapColorsChanged() }
+    }
+
     @objc func openFullDiskAccessSettings(_ sender: Any?) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
             NSWorkspace.shared.open(url)
@@ -259,16 +267,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Show Free Space", #selector(Scan.toggleFreeSpace(_:))))
         menu.addItem(item("Show Other Space", #selector(Scan.toggleOtherSpace(_:))))
         menu.addItem(item("Show Physical File Size", #selector(Scan.toggleSizeMode(_:))))
+        menu.addItem(mapColorsItem())
         menu.addItem(.separator())
         menu.addItem(item("Split Horizontally", #selector(Scan.toggleSplitDirection(_:))))
         menu.addItem(item("File Kind Statistics", #selector(Scan.toggleKinds(_:)), "k", [.command, .option]))
         menu.addItem(item("Selection List", #selector(Scan.toggleSelectionList(_:)), "l", [.command, .option]))
         menu.addItem(item("Information", #selector(Scan.toggleInformation(_:)), "i"))
         menu.addItem(.separator())
-        menu.addItem(item("Show Toolbar", #selector(NSWindow.toggleToolbarShown(_:))))
+        menu.addItem(item("Show Toolbar", #selector(Scan.toggleToolbar(_:)), "t", [.command, .option]))
         menu.addItem(item("Customize Toolbar…", #selector(NSWindow.runToolbarCustomizationPalette(_:))))
         menu.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
         return menu
+    }
+
+    private func mapColorsItem() -> NSMenuItem {
+        let choices = NSMenu()
+        for (title, scheme) in [("System", MapColors.system), ("Families", MapColors.families)] {
+            let choice = item(title, #selector(chooseMapColors(_:)), target: self)
+            choice.representedObject = scheme.rawValue
+            choices.addItem(choice)
+        }
+        let parent = NSMenuItem(title: "Map Colors", action: nil, keyEquivalent: "")
+        parent.submenu = choices
+        return parent
     }
 
     private func windowMenu() -> NSMenu {
@@ -284,5 +305,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.addItem(item("Grant Full Disk Access…", #selector(openFullDiskAccessSettings(_:)), target: self))
         return menu
+    }
+}
+
+extension AppDelegate: NSMenuItemValidation {
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(chooseMapColors(_:)) {
+            item.state = item.representedObject as? String == Preferences.currentMapColors.rawValue ? .on : .off
+        }
+        return true
     }
 }

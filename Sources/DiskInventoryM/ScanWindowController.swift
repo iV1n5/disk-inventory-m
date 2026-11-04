@@ -46,7 +46,6 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     private let contentSplit = NSSplitView()
     private let sideSplit = NSSplitView()
     private let bottomSplit = NSSplitView()
-    private var searchItem: NSSearchToolbarItem?
     private var infoPanel: InfoPanelController?
 
     init(path: String) {
@@ -112,7 +111,7 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         contentSplit.setHoldingPriority(NSLayoutConstraint.Priority(260), forSubviewAt: 0)
         contentSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
 
-        configure(sideSplit, vertical: true, name: "SideSplit")
+        configure(sideSplit, vertical: true, name: "KindsSplit")
         sideSplit.addArrangedSubview(contentSplit)
         sideSplit.addArrangedSubview(kinds.scrollView)
         sideSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
@@ -124,6 +123,7 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         bottomSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
         bottomSplit.setHoldingPriority(NSLayoutConstraint.Priority(260), forSubviewAt: 1)
         selectionList.view.isHidden = true
+        kinds.scrollView.isHidden = !UserDefaults.standard.bool(forKey: Preferences.showKinds)
 
         for pane in [outline.scrollView, kinds.scrollView, treemapPane] as [NSView] {
             let width = pane.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
@@ -232,8 +232,12 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         guard !defaults.bool(forKey: Preferences.panesArranged) else { return }
         defaults.set(true, forKey: Preferences.panesArranged)
         window?.contentView?.layoutSubtreeIfNeeded()
-        sideSplit.setPosition(sideSplit.bounds.width - 330, ofDividerAt: 0)
+        if !kinds.scrollView.isHidden { sizeKindsPanel() }
         contentSplit.setPosition(contentSplit.isVertical ? 400 : 260, ofDividerAt: 0)
+    }
+
+    private func sizeKindsPanel() {
+        sideSplit.setPosition(sideSplit.bounds.width - 330, ofDividerAt: 0)
     }
 
     // MARK: Scanning
@@ -345,9 +349,10 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     private func refreshStatistics() {
         guard let tree else { return }
         let options = self.options
+        let scheme = Preferences.currentMapColors
         work.async { [weak self] in
             let statistics = tree.kindStatistics(options)
-            let colors = KindPalette.colors(for: statistics, table: tree.kindTable)
+            let colors = KindPalette.colors(for: statistics, table: tree.kindTable, scheme: scheme)
             Task { @MainActor [weak self] in
                 guard let self, self.tree === tree else { return }
                 self.statistics = statistics
@@ -358,6 +363,10 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
                 self.updateTotals()
             }
         }
+    }
+
+    func mapColorsChanged() {
+        refreshStatistics()
     }
 
     private func updateBanner() {
@@ -684,6 +693,17 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     @objc func toggleKinds(_ sender: Any?) {
         kinds.scrollView.isHidden.toggle()
         sideSplit.adjustSubviews()
+        let isShown = !kinds.scrollView.isHidden
+        UserDefaults.standard.set(isShown, forKey: Preferences.showKinds)
+        if isShown {
+            window?.contentView?.layoutSubtreeIfNeeded()
+            if kinds.scrollView.frame.width < 300 { sizeKindsPanel() }
+        }
+    }
+
+    @objc func toggleToolbar(_ sender: Any?) {
+        window?.toggleToolbarShown(sender)
+        UserDefaults.standard.set(window?.toolbar?.isVisible == true, forKey: Preferences.showToolbar)
     }
 
     @objc func toggleSelectionList(_ sender: Any?) {
@@ -731,14 +751,10 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    /// The search field lives in the list, so looking for something opens the list first.
     @objc func focusSearch(_ sender: Any?) {
-        searchItem?.beginSearchInteraction()
-    }
-
-    @objc private func searchChanged(_ sender: NSSearchField) {
-        listQuery = sender.stringValue
-        if !listQuery.isEmpty, selectionList.view.isHidden { toggleSelectionList(nil) }
-        reloadSelectionList()
+        if selectionList.view.isHidden { toggleSelectionList(nil) }
+        window?.makeFirstResponder(selectionList.searchField)
     }
 
     // MARK: Context menu
@@ -806,6 +822,7 @@ extension ScanWindowController: NSMenuItemValidation, NSToolbarItemValidation {
         case #selector(toggleKinds(_:)): item.state = kinds.scrollView.isHidden ? .off : .on
         case #selector(toggleSelectionList(_:)): item.state = selectionList.view.isHidden ? .off : .on
         case #selector(toggleInformation(_:)): item.state = infoPanel?.window?.isVisible == true ? .on : .off
+        case #selector(toggleToolbar(_:)): item.title = window?.toolbar?.isVisible == true ? "Hide Toolbar" : "Show Toolbar"
         default: break
         }
         return isEnabled(item.action)
@@ -829,22 +846,23 @@ extension ScanWindowController: NSToolbarDelegate {
         static let kinds = NSToolbarItem.Identifier("kinds")
         static let list = NSToolbarItem.Identifier("list")
         static let info = NSToolbarItem.Identifier("info")
-        static let search = NSToolbarItem.Identifier("search")
     }
 
     fileprivate func buildToolbar(in window: NSWindow) {
-        let toolbar = NSToolbar(identifier: "ScanToolbar")
+        let toolbar = NSToolbar(identifier: "WindowToolbar")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = true
         toolbar.autosavesConfiguration = true
         window.toolbar = toolbar
+        // Out of the way until someone asks for it. This only takes once the window has the toolbar.
+        toolbar.isVisible = UserDefaults.standard.bool(forKey: Preferences.showToolbar)
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             Item.zoomOut, Item.zoomIn, .space, Item.reveal, Item.quickLook, Item.trash, Item.refresh,
-            .flexibleSpace, Item.list, Item.kinds, Item.info, Item.search,
+            .flexibleSpace, Item.list, Item.kinds, Item.info,
         ]
     }
 
@@ -873,14 +891,6 @@ extension ScanWindowController: NSToolbarDelegate {
         case Item.list: return button("Selection List", "list.bullet.rectangle", #selector(toggleSelectionList(_:)), "Show or hide the list of files")
         case Item.kinds: return button("Kinds", "chart.pie", #selector(toggleKinds(_:)), "Show or hide the file kind statistics")
         case Item.info: return button("Information", "info.circle", #selector(toggleInformation(_:)), "Show or hide details of the selected item")
-        case Item.search:
-            let item = NSSearchToolbarItem(itemIdentifier: identifier)
-            item.searchField.placeholderString = "Find by Name"
-            item.searchField.target = self
-            item.searchField.action = #selector(searchChanged(_:))
-            item.searchField.sendsWholeSearchString = true
-            searchItem = item
-            return item
         default: return nil
         }
     }
@@ -939,7 +949,7 @@ extension ScanWindowController: KindsPanelDelegate {
     func kindsPanelShowFiles(of kind: KindID) {
         listKind = kind
         listQuery = ""
-        searchItem?.searchField.stringValue = ""
+        selectionList.searchField.stringValue = ""
         if let tree { selectionList.setKinds(statistics, table: tree.kindTable, selected: kind) }
         if selectionList.view.isHidden {
             toggleSelectionList(nil)
@@ -957,7 +967,12 @@ extension ScanWindowController: SelectionListDelegate {
     func selectionList(didChooseKind kind: KindID?) {
         listKind = kind
         listQuery = ""
-        searchItem?.searchField.stringValue = ""
+        selectionList.searchField.stringValue = ""
+        reloadSelectionList()
+    }
+
+    func selectionList(didSearchFor query: String) {
+        listQuery = query
         reloadSelectionList()
     }
 
@@ -1035,6 +1050,11 @@ extension ScanWindowController {
         state["free"] = options.showFreeSpace ? "yes" : "no"
         state["other"] = options.showOtherSpace ? "yes" : "no"
         state["listRows"] = "\(selectionList.uiRowCount)"
+        state["searchVisible"] = selectionList.searchField.isHiddenOrHasHiddenAncestor ? "no" : "yes"
+        state["toolbar"] = window?.toolbar?.isVisible == true ? "shown" : "hidden"
+        state["mapColors"] = Preferences.currentMapColors.rawValue
+        state["kindColors"] = treemap.uiColorSummary
+        state["outline"] = treemap.uiOutline
         state["banner"] = banner.isHidden ? "hidden" : "shown"
         state["infoVisible"] = infoPanel?.window?.isVisible == true ? "yes" : "no"
         state["firstRow"] = uiFirstOutlineRow
@@ -1102,9 +1122,8 @@ extension ScanWindowController {
     }
 
     func uiSearch(_ text: String) {
-        guard let field = searchItem?.searchField else { return }
-        field.stringValue = text
-        searchChanged(field)
+        selectionList.searchField.stringValue = text
+        selectionList(didSearchFor: text)
     }
 }
 #endif

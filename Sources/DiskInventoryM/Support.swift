@@ -15,6 +15,9 @@ enum Preferences {
     static let showPhysicalSize = "ShowPhysicalFileSize"
     static let showFreeSpace = "ShowFreeSpace"
     static let showOtherSpace = "ShowOtherSpace"
+    static let showKinds = "ShowKindStatistics"
+    static let showToolbar = "ShowToolbar"
+    static let mapColors = "MapColors"
     static let animatedZooming = "AnimatedZooming"
     static let splitHorizontally = "SplitWindowHorizontally"
     static let recentFolders = "RecentFolders"
@@ -24,11 +27,18 @@ enum Preferences {
         UserDefaults.standard.register(defaults: [
             showPackageContents: false,
             showPhysicalSize: true,
-            showFreeSpace: true,
-            showOtherSpace: true,
+            showFreeSpace: false,
+            showOtherSpace: false,
+            showKinds: false,
+            showToolbar: false,
+            mapColors: MapColors.system.rawValue,
             animatedZooming: true,
             splitHorizontally: false,
         ])
+    }
+
+    static var currentMapColors: MapColors {
+        MapColors(rawValue: UserDefaults.standard.string(forKey: mapColors) ?? "") ?? .system
     }
 
     /// Free and other space only make sense for whole volumes: next to a whole disk, a folder

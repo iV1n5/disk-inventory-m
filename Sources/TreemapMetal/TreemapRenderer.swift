@@ -17,14 +17,18 @@ public final class TreemapRenderer: @unchecked Sendable {
 
     /// How light falls on the cushions.
     public struct Shading: Sendable {
-        public var ambient: Float = 0.20
-        public var diffuse: Float = 0.80
+        public var ambient: Float = 0.55
+        public var diffuse: Float = 0.45
         /// Direction towards the light: up and to the left, and mostly facing the screen.
         public var light = SIMD3<Float>(-0.1, -0.2, 1)
         /// Overall brightness. Above 1, the tops of the cushions go past full colour.
-        public var gain: Float = 1.35
+        public var gain: Float = 1.05
         /// How much of the light past full colour turns into white.
-        public var spill: Float = 0.70
+        public var spill: Float = 0.25
+        /// Space kept clear on each side of a tile, in points.
+        public var gap: Float = 0.5
+        /// How round the corners of a tile are, in points.
+        public var radius: Float = 2.5
 
         public init() {}
     }
@@ -65,6 +69,13 @@ public final class TreemapRenderer: @unchecked Sendable {
         var gain: Float
         var spill: Float
         var paletteCount: UInt32
+        var gap: Float
+        var radius: Float
+    }
+
+    /// What shows between the tiles.
+    public static var background: MTLClearColor {
+        MTLClearColor(red: 20.0 / 255, green: 21.0 / 255, blue: 25.0 / 255, alpha: 1)
     }
 
     public let device: MTLDevice
@@ -122,7 +133,8 @@ public final class TreemapRenderer: @unchecked Sendable {
         palette: MTLBuffer,
         into commandBuffer: MTLCommandBuffer,
         target: MTLTexture,
-        background: MTLClearColor
+        background: MTLClearColor = TreemapRenderer.background,
+        pixelsPerPoint: Float = 2
     ) {
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = target
@@ -146,7 +158,9 @@ public final class TreemapRenderer: @unchecked Sendable {
                 diffuse: shading.diffuse,
                 gain: shading.gain,
                 spill: shading.spill,
-                paletteCount: UInt32(palette.length / MemoryLayout<SIMD4<Float>>.stride)
+                paletteCount: UInt32(palette.length / MemoryLayout<SIMD4<Float>>.stride),
+                gap: shading.gap * pixelsPerPoint,
+                radius: shading.radius * pixelsPerPoint
             )
             encoder.setVertexBuffer(tiles, offset: 0, index: 0)
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 2)
@@ -173,8 +187,7 @@ public final class TreemapRenderer: @unchecked Sendable {
             [(makeScene(layout), Placement())],
             palette: palette,
             into: commandBuffer,
-            target: texture,
-            background: MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+            target: texture
         )
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
@@ -220,6 +233,8 @@ public final class TreemapRenderer: @unchecked Sendable {
         float gain;
         float spill;
         uint paletteCount;
+        float gap;
+        float radius;
     };
 
     struct Fragment {
@@ -227,6 +242,7 @@ public final class TreemapRenderer: @unchecked Sendable {
         float2 local;
         float4 cushion [[flat]];
         float3 color [[flat]];
+        float2 size [[flat]];
     };
 
     vertex Fragment tileVertex(uint corner [[vertex_id]],
@@ -243,6 +259,7 @@ public final class TreemapRenderer: @unchecked Sendable {
         out.position = float4(pixel.x / uniforms.viewport.x * 2 - 1,
                               1 - pixel.y / uniforms.viewport.y * 2, 0, 1);
         out.local = unit * size;
+        out.size = size;
         out.cushion = tile.cushion;
         // Kinds found by a refresh can get here just before the palette that includes them.
         out.color = palette[min(tile.kind, uniforms.paletteCount - 1)].rgb;
@@ -263,7 +280,17 @@ public final class TreemapRenderer: @unchecked Sendable {
         float3 color = in.color * intensity * uniforms.gain;
         float excess = max(max(color.r, max(color.g, color.b)) - 1.0, 0.0);
         color = min(color + excess * uniforms.spill, 1.0);
-        return float4(color, uniforms.opacity);
+
+        // Large tiles stand apart, as rounded tiles with a gap between them. Small ones lose both
+        // gradually, or a folder of thousands of files would turn into a field of dark dots.
+        float shortest = min(in.size.x, in.size.y);
+        float gap = uniforms.gap * smoothstep(10.0, 30.0, shortest / max(uniforms.gap, 0.001));
+        float radius = uniforms.radius * smoothstep(2.8, 8.8, shortest / max(uniforms.radius, 0.001));
+        float2 centre = in.size * 0.5;
+        float2 q = abs(in.local - centre) - (centre - gap - radius);
+        float distance = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+        float coverage = clamp(0.5 - distance, 0.0, 1.0);
+        return float4(color, uniforms.opacity * coverage);
     }
     """
 }

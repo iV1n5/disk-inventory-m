@@ -59,6 +59,28 @@ import Testing
         #expect(tree.node(tree.root).fileCount == 2)
     }
 
+    @Test func sortsKindsIntoFamilies() throws {
+        let folder = try TemporaryFolder()
+        let expected: [(String, KindFamily)] = [
+            ("clip.mov", .video), ("clip.mp4", .video),
+            ("photo.jpg", .image), ("shot.png", .image), ("raw.dng", .image),
+            ("song.mp3", .audio), ("take.wav", .audio), ("album.flac", .audio),
+            ("backup.zip", .archive), ("logs.gz", .archive), ("disk.dmg", .archive), ("setup.pkg", .archive),
+            ("paper.pdf", .document), ("letter.docx", .document), ("notes.txt", .document), ("book.epub", .document),
+            ("main.swift", .data), ("config.json", .data), ("table.csv", .data), ("blob.unknownthing", .data),
+        ]
+        for (name, _) in expected { try folder.write(name, bytes: 10) }
+        try folder.write("Example.app/Contents/MacOS/Example", bytes: 10)
+
+        let tree = try DiskScanner(path: folder.path).run()
+        for (name, family) in expected {
+            let kind = tree.kindTable.kinds[Int(tree.kind(of: try tree.id(name)))]
+            #expect(kind.family == family, "\(name) is \(kind.name), in \(kind.family)")
+        }
+        let app = tree.kindTable.kinds[Int(tree.kind(of: try tree.id("Example.app")))]
+        #expect(app.family == .application)
+    }
+
     @Test func recognisesPackagesAndKinds() throws {
         let folder = try TemporaryFolder()
         try folder.write("Example.app/Contents/MacOS/Example", bytes: 10)
