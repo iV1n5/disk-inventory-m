@@ -108,6 +108,8 @@ final class UIDriver {
             if arguments.count == 2, let x = Double(arguments[0]), let y = Double(arguments[1]) { contextMenu(x: x, y: y) }
         case "click-path":
             if let x = Double(rest) { clickPathBar(x: x) }
+        case "drag-divider":
+            if let width = Double(rest) { dragListDivider(to: width) }
         case "select":
             controller?.uiSelect(relativePath: rest)
         case "sort":
@@ -116,6 +118,12 @@ final class UIDriver {
             if let row = Int(rest) { controller?.uiSelectOutlineRow(row) }
         case "kind":
             if let row = Int(rest) { controller?.uiSelectKindRow(row) }
+        case "cleanup-home":
+            Cleanup.homeForTests = rest
+        case "cleanup":
+            if let row = Int(rest) { controller?.uiSelectCleanup(row) }
+        case "cleanup-trash":
+            controller?.uiTrashCleanup()
         case "find":
             controller?.uiSearch(rest)
         case "state":
@@ -268,6 +276,25 @@ final class UIDriver {
         }
         if let up = event(.leftMouseUp) { NSApp.postEvent(up, atStart: false) }
         if let down = event(.leftMouseDown) { window.sendEvent(down) }
+    }
+
+    /// Drags the divider next to the list. Split views track the mouse in a loop of their own, so
+    /// as with the path bar, what comes after the press has to be queued before it.
+    private func dragListDivider(to width: Double) {
+        guard let controller, let window = controller.window else { return }
+        let split = controller.uiContentSplit
+        let list = controller.uiList
+        let start = split.convert(NSPoint(x: list.frame.maxX + split.dividerThickness / 2, y: split.bounds.midY), to: nil)
+        let end = NSPoint(x: start.x + width - list.frame.width, y: start.y)
+        func event(_ type: NSEvent.EventType, _ location: NSPoint) -> NSEvent? {
+            NSEvent.mouseEvent(
+                with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            )
+        }
+        if let drag = event(.leftMouseDragged, end) { NSApp.postEvent(drag, atStart: false) }
+        if let up = event(.leftMouseUp, end) { NSApp.postEvent(up, atStart: false) }
+        if let down = event(.leftMouseDown, start) { window.sendEvent(down) }
     }
 
     // MARK: Pictures

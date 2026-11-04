@@ -1,0 +1,59 @@
+# The cleanup panel, with a home folder on the throwaway image: nothing here touches the real one.
+run mkdir -p {{VOLUME}}/Home/Library/Caches/Homebrew {{VOLUME}}/Home/Library/Logs/Old
+run dd if=/dev/urandom of={{VOLUME}}/Home/Library/Caches/Homebrew/bottle.tar.gz bs=1m count=3 2>/dev/null
+run dd if=/dev/urandom of={{VOLUME}}/Home/Library/Logs/Old/app.log bs=1m count=2 2>/dev/null
+cleanup-home {{VOLUME}}/Home
+open {{VOLUME}}
+wait-scan
+wait 0.6
+expect sidePanel=none
+
+menu View > Cleanup Suggestions
+wait 0.8
+expect sidePanel=cleanup
+expect cleanupRows=2
+expect-layout-matches
+snapshot {{OUT}}/20-cleanup.png
+
+# The largest comes first. A tool's cache is left to the tool, and choosing shows it on the map.
+cleanup 0
+wait 0.3
+expect selection=Homebrew
+expect cleanupCommand=brew_cleanup_--prune=all
+expect cleanupAction=Copy_Command
+snapshot {{OUT}}/21-cleanup-command.png
+
+# Anything else goes to the Trash, which in this test is the image's own.
+cleanup 1
+wait 0.3
+expect selection=Old
+expect cleanupCommand=none
+expect cleanupAction=Move_to_Trash…
+remember rootSize
+cleanup-trash
+wait-for cleanupRows=1
+wait 0.3
+expect-changed rootSize
+expect-not selection=Old
+run test ! -e {{VOLUME}}/Home/Library/Logs/Old && echo gone > {{OUT}}/cleanup-result.txt
+
+# The panels share their place.
+menu View > File Kind Statistics
+wait 0.3
+expect sidePanel=kinds
+expect kindsHidden=no
+expect-layout-matches
+menu View > Cleanup Suggestions
+wait 0.3
+expect sidePanel=cleanup
+expect kindsHidden=yes
+menu View > Cleanup Suggestions
+wait 0.3
+expect sidePanel=none
+expect-layout-matches
+
+# A width chosen by hand is for keeps. See relaunch.ui.
+drag-divider 300
+wait 0.4
+expect listWidth=300
+expect-layout-matches

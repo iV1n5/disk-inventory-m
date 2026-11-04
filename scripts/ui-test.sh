@@ -15,6 +15,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary" "$app/Contents/MacOS/DiskInventoryM"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+cp Resources/CleanupRules.json "$app/Contents/Resources/CleanupRules.json"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 codesign --force --sign - --timestamp=none "$app"
 

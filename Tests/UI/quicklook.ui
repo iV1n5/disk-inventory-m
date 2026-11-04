@@ -5,6 +5,7 @@
 open {{PROJECT}}/Resources
 wait-scan
 wait 0.5
+expect listWidth=480
 select Info.plist
 expect selection=Info.plist
 expect-quicklook-wiring Info.plist

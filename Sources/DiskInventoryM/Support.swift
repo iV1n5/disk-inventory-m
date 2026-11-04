@@ -9,19 +9,48 @@ enum Graphics {
     static let renderer: TreemapRenderer? = try? TreemapRenderer()
 }
 
+/// What occupies the place to the right of the map.
+enum SidePanel: String {
+    case none, kinds, cleanup
+}
+
+/// The catalogue of what can usually be cleaned up, which ships with the app.
+enum Cleanup {
+    static let rules: [CleanupRule] = {
+        guard
+            let url = Bundle.main.url(forResource: "CleanupRules", withExtension: "json"),
+            let data = try? Data(contentsOf: url),
+            let rules = try? CleanupRule.load(from: data)
+        else { return [] }
+        return rules
+    }()
+
+    #if UITEST
+    /// So that tests can stay away from the real home folder.
+    @MainActor static var homeForTests: String?
+    #endif
+
+    @MainActor static var context: CleanupContext {
+        #if UITEST
+        if let homeForTests { return CleanupContext(home: homeForTests) }
+        #endif
+        return CleanupContext()
+    }
+}
+
 /// Settings that apply to newly opened windows.
 enum Preferences {
     static let showPackageContents = "ShowPackageContents"
     static let showPhysicalSize = "ShowPhysicalFileSize"
     static let showFreeSpace = "ShowFreeSpace"
     static let showOtherSpace = "ShowOtherSpace"
-    static let showKinds = "ShowKindStatistics"
+    static let sidePanel = "SidePanel"
     static let showToolbar = "ShowToolbar"
     static let mapColors = "MapColors"
     static let animatedZooming = "AnimatedZooming"
     static let splitHorizontally = "SplitWindowHorizontally"
     static let recentFolders = "RecentFolders"
-    static let panesArranged = "PanesArranged"
+    static let listWidth = "ListWidth"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
@@ -29,12 +58,16 @@ enum Preferences {
             showPhysicalSize: true,
             showFreeSpace: false,
             showOtherSpace: false,
-            showKinds: false,
+            sidePanel: SidePanel.none.rawValue,
             showToolbar: false,
             mapColors: MapColors.system.rawValue,
             animatedZooming: true,
             splitHorizontally: false,
         ])
+    }
+
+    static var currentSidePanel: SidePanel {
+        SidePanel(rawValue: UserDefaults.standard.string(forKey: sidePanel) ?? "") ?? .none
     }
 
     static var currentMapColors: MapColors {

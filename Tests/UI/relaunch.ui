@@ -1,0 +1,7 @@
+# What the previous run left behind has to survive a restart of the app.
+open {{VOLUME}}
+wait-scan
+wait 0.5
+expect listWidth=300
+expect sidePanel=none
+expect toolbar=hidden

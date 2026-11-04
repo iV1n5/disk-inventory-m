@@ -61,6 +61,7 @@ SIGN_IDENTITY="My Certificate" scripts/build-app.sh
 | Find by name | ⌘F, in the list of files |
 | Show the toolbar | ⌥⌘T |
 | Change the map's colours | View > Map Colors |
+| See what could be cleaned up | ⌥⌘C |
 
 A solid outline in the map means that rectangle is what you selected. Anything too small for that
 is marked in its place instead: with a dashed outline around the small files it is among, or with a
@@ -75,6 +76,23 @@ With Families, a colour says what a file is, and it stays the same on every disk
 green for images, purple for audio, orange for archives and disk images, pink for applications,
 yellow for documents and slate for everything else.
 
+## Cleaning up
+
+Cleanup Suggestions lists what tends to take up space for no good reason, with what the scan found
+of it. Nothing happens without a click.
+
+Items under "Safe to remove" come back by themselves when needed, such as caches, logs and build
+results. Items under "Worth a look" might matter to you, so check them first. Choosing an item shows
+it on the map, along with what it takes to remove it:
+
+- Files can go to the Trash, which can be undone.
+- For things a tool looks after, like Homebrew or Docker, you get a command to paste into the
+  Terminal. The app never runs one itself. After running it, refresh with ⌘R.
+
+Your own documents, photos, mail and the system are never suggested. The suggestions come from
+[`Resources/CleanupRules.json`](Resources/CleanupRules.json), which is easy to add to, and
+`CleanupTests` makes sure no rule reaches for personal files, or uses `sudo` or `rm`.
+
 ## How it works
 
 | Part | Where | Notes |
@@ -84,6 +102,7 @@ yellow for documents and slate for everything else.
 | Treemap layout | `Sources/DiskCore/TreemapLayout.swift` | Squarified layout (Bruls, Huizing, van Wijk). Merges anything below a pixel, so its cost follows the pixels on screen rather than the number of files. |
 | Rendering | `Sources/TreemapMetal/TreemapRenderer.swift` | Cushion shading (van Wijk, van de Wetering) in a Metal fragment shader, which also rounds large tiles and sets them apart. The shader compiles at launch, so no Metal toolchain is needed to build. |
 | Interface | `Sources/DiskInventoryM/` | AppKit, written in code. `NSOutlineView` copes with folders of any size. |
+| Cleanup | `Sources/DiskCore/Cleanup.swift` | Matches the rules in `Resources/CleanupRules.json` against the tree already in memory, so it reads nothing from disk. |
 | `dim` | `Sources/dim/` | Command line companion: `dim scan <path>`, `dim render <path> <out.png>`. |
 
 Treemaps are computed on a serial queue per window. The tree only changes on that same queue, and

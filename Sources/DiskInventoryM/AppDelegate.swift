@@ -271,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item("Split Horizontally", #selector(Scan.toggleSplitDirection(_:))))
         menu.addItem(item("File Kind Statistics", #selector(Scan.toggleKinds(_:)), "k", [.command, .option]))
+        menu.addItem(item("Cleanup Suggestions", #selector(Scan.toggleCleanup(_:)), "c", [.command, .option]))
         menu.addItem(item("Selection List", #selector(Scan.toggleSelectionList(_:)), "l", [.command, .option]))
         menu.addItem(item("Information", #selector(Scan.toggleInformation(_:)), "i"))
         menu.addItem(.separator())

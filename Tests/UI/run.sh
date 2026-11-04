@@ -50,4 +50,8 @@ run_script volume
 [[ "$(cat "$out/trash-result.txt" 2>/dev/null)" == "gone" ]] || { echo "FAILED: the trashed file is still there"; result=1; }
 run_script launch
 run_script quicklook
+rm -f "$out/cleanup-result.txt"
+run_script cleanup
+[[ "$(cat "$out/cleanup-result.txt" 2>/dev/null)" == "gone" ]] || { echo "FAILED: the cleaned up folder is still there"; result=1; }
+run_script relaunch
 exit $result

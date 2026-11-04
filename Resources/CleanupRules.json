@@ -1,0 +1,271 @@
+[
+  {
+    "id": "trash", "title": "Trash", "safety": "safe", "action": "command",
+    "paths": ["~/.Trash"],
+    "command": "osascript -e 'tell application \"Finder\" to empty trash'",
+    "why": "Files you already threw away. They use space until the Trash is emptied, and emptying it can't be undone."
+  },
+  {
+    "id": "homebrew", "title": "Homebrew downloads", "safety": "safe", "action": "command",
+    "paths": ["~/Library/Caches/Homebrew"],
+    "command": "brew cleanup --prune=all",
+    "why": "Packages Homebrew already installed, and old versions of them. Add -n to the command to see what would go."
+  },
+  {
+    "id": "uv", "title": "uv cache", "safety": "safe", "action": "command",
+    "paths": ["~/.cache/uv"],
+    "command": "uv cache clean",
+    "why": "Python packages uv downloaded. It fetches them again when a project needs them."
+  },
+  {
+    "id": "pip", "title": "pip cache", "safety": "safe", "action": "command",
+    "paths": ["~/Library/Caches/pip"],
+    "command": "pip3 cache purge",
+    "why": "Python packages pip downloaded. It fetches them again when needed."
+  },
+  {
+    "id": "npm", "title": "npm cache", "safety": "safe", "action": "command",
+    "paths": ["~/.npm/_cacache"],
+    "command": "npm cache clean --force",
+    "why": "Packages npm downloaded. It fetches them again when needed."
+  },
+  {
+    "id": "yarn", "title": "Yarn cache", "safety": "safe", "action": "command",
+    "paths": ["~/Library/Caches/Yarn"],
+    "command": "yarn cache clean",
+    "why": "Packages Yarn downloaded. It fetches them again when needed."
+  },
+  {
+    "id": "pnpm", "title": "pnpm store", "safety": "safe", "action": "command",
+    "paths": ["~/Library/pnpm/store"],
+    "command": "pnpm store prune",
+    "why": "Removes the packages no project uses any more."
+  },
+  {
+    "id": "go-build", "title": "Go build cache", "safety": "safe", "action": "command",
+    "paths": ["~/Library/Caches/go-build"],
+    "command": "go clean -cache",
+    "why": "Compiled Go code. The next build takes longer and fills it again."
+  },
+  {
+    "id": "go-modules", "title": "Go modules", "safety": "safe", "action": "command",
+    "paths": ["~/go/pkg/mod"],
+    "command": "go clean -modcache",
+    "why": "Downloaded Go dependencies. They come back the next time a project needs them."
+  },
+  {
+    "id": "cocoapods", "title": "CocoaPods cache", "safety": "safe", "action": "command",
+    "paths": ["~/Library/Caches/CocoaPods"],
+    "command": "pod cache clean --all",
+    "why": "Pods already downloaded. CocoaPods fetches them again when needed."
+  },
+  {
+    "id": "conda", "title": "Conda packages", "safety": "safe", "action": "command",
+    "paths": ["~/miniconda3/pkgs", "~/anaconda3/pkgs", "~/miniforge3/pkgs", "~/opt/anaconda3/pkgs"],
+    "command": "conda clean --all",
+    "why": "Package archives and caches. Your environments keep working."
+  },
+  {
+    "id": "composer", "title": "Composer cache", "safety": "safe", "action": "command",
+    "paths": ["~/.composer/cache", "~/Library/Caches/composer"],
+    "command": "composer clear-cache",
+    "why": "PHP packages Composer downloaded. It fetches them again when needed."
+  },
+  {
+    "id": "dart", "title": "Dart and Flutter packages", "safety": "safe", "action": "command",
+    "paths": ["~/.pub-cache"],
+    "command": "dart pub cache clean",
+    "why": "Downloaded packages. Run pub get in your projects afterwards to fetch what they need."
+  },
+  {
+    "id": "cargo", "title": "Rust downloads", "safety": "safe", "action": "trash",
+    "paths": ["~/.cargo/registry/cache", "~/.cargo/registry/src", "~/.cargo/git/checkouts"],
+    "why": "Crates Cargo downloaded. It fetches them again on the next build."
+  },
+  {
+    "id": "gradle", "title": "Gradle caches", "safety": "safe", "action": "trash",
+    "paths": ["~/.gradle/caches"],
+    "why": "Dependencies and build results. The next build is slower while Gradle fetches them again. Stop any running builds first."
+  },
+  {
+    "id": "swiftpm", "title": "Swift Package Manager cache", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/org.swift.swiftpm"],
+    "why": "Downloaded Swift packages. They come back on the next build."
+  },
+  {
+    "id": "carthage", "title": "Carthage cache", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/org.carthage.CarthageKit"],
+    "why": "Downloaded dependencies. They come back the next time they are needed."
+  },
+  {
+    "id": "bazel", "title": "Bazel build output", "safety": "safe", "action": "trash",
+    "paths": ["/private/var/tmp/_bazel_*"],
+    "why": "Everything Bazel built. The next build starts from scratch."
+  },
+  {
+    "id": "derived-data", "title": "Xcode build data", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Developer/Xcode/DerivedData"],
+    "why": "Build results and indexes. Xcode makes them again, so the next build of each project takes longer."
+  },
+  {
+    "id": "xcode-cache", "title": "Xcode cache", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/com.apple.dt.Xcode"],
+    "why": "Temporary data of Xcode. Quit Xcode first."
+  },
+  {
+    "id": "device-support", "title": "Device support files", "safety": "safe", "action": "trash",
+    "paths": [
+      "~/Library/Developer/Xcode/iOS DeviceSupport/*",
+      "~/Library/Developer/Xcode/watchOS DeviceSupport/*",
+      "~/Library/Developer/Xcode/tvOS DeviceSupport/*"
+    ],
+    "why": "Debugging symbols copied from devices. Xcode copies them again when you connect one."
+  },
+  {
+    "id": "simulator-caches", "title": "Simulator caches", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Developer/CoreSimulator/Caches"],
+    "why": "Temporary data of the simulators. They rebuild it when they start."
+  },
+  {
+    "id": "browser-testing", "title": "Browsers for testing", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/ms-playwright", "~/.cache/puppeteer", "~/Library/Caches/Cypress"],
+    "why": "Browsers that testing tools downloaded. They download them again when needed."
+  },
+  {
+    "id": "electron-downloads", "title": "Electron downloads", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/electron", "~/Library/Caches/electron-builder", "~/Library/Caches/node-gyp"],
+    "why": "Files build tools downloaded. They download them again when needed."
+  },
+  {
+    "id": "browsers", "title": "Web browser caches", "safety": "safe", "action": "trash",
+    "paths": [
+      "~/Library/Caches/com.apple.Safari",
+      "~/Library/Caches/Google/Chrome",
+      "~/Library/Caches/Firefox",
+      "~/Library/Caches/Microsoft Edge",
+      "~/Library/Caches/BraveSoftware"
+    ],
+    "why": "Copies of web pages. Sites load a little slower at first, and you stay logged in. Quit the browser first."
+  },
+  {
+    "id": "vscode", "title": "Visual Studio Code caches", "safety": "safe", "action": "trash",
+    "paths": [
+      "~/Library/Application Support/Code/Cache",
+      "~/Library/Application Support/Code/CachedData",
+      "~/Library/Application Support/Code/CachedExtensionVSIXs",
+      "~/Library/Application Support/Code/Code Cache",
+      "~/Library/Application Support/Code/GPUCache"
+    ],
+    "why": "Temporary data of the editor. Quit it first."
+  },
+  {
+    "id": "adobe-media", "title": "Adobe media cache", "safety": "safe", "action": "trash",
+    "paths": [
+      "~/Library/Application Support/Adobe/Common/Media Cache Files",
+      "~/Library/Application Support/Adobe/Common/Media Cache"
+    ],
+    "why": "Previews of media files. Adobe apps make them again when you open a project."
+  },
+  {
+    "id": "ios-updates", "title": "iPhone and iPad updates", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/iTunes/iPhone Software Updates", "~/Library/iTunes/iPad Software Updates"],
+    "why": "System updates already downloaded for your devices. Your Mac downloads them again if needed."
+  },
+  {
+    "id": "mail-downloads", "title": "Mail attachments opened", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"],
+    "why": "Copies of attachments you opened. The originals stay in your messages."
+  },
+  {
+    "id": "logs", "title": "Logs", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Logs/*"],
+    "why": "Records of what apps did, useful only for tracking down a problem. Apps start new ones."
+  },
+  {
+    "id": "app-caches", "title": "App caches", "safety": "safe", "action": "trash",
+    "paths": ["~/Library/Caches/*"],
+    "except": ["com.apple.*", "CloudKit", "FamilyCircle"],
+    "why": "Temporary data of your apps, which they make again. Some may be slower for a while. Quit them first."
+  },
+  {
+    "id": "app-cache-folders", "title": "Caches inside app data", "safety": "review", "action": "trash",
+    "paths": [
+      "~/Library/Application Support/*/Cache",
+      "~/Library/Application Support/*/Code Cache",
+      "~/Library/Application Support/*/GPUCache"
+    ],
+    "why": "Temporary data of apps like Slack or Discord. Their own folders hold other things, so check the list, and quit those apps first."
+  },
+  {
+    "id": "temporary", "title": "Old temporary files", "safety": "review", "action": "trash",
+    "paths": ["/private/tmp/*", "/private/var/tmp/*", "$TMPDIR/*"],
+    "olderThanDays": 7,
+    "why": "Left behind by apps, and unchanged for a week. macOS clears much of this when it restarts, which is the gentlest way to get rid of it."
+  },
+  {
+    "id": "disk-images", "title": "Old installers in Downloads", "safety": "review", "action": "trash",
+    "paths": ["~/Downloads/*.dmg", "~/Downloads/*.pkg", "~/Downloads/*.iso"],
+    "olderThanDays": 30,
+    "why": "Installers usually have no use once the app is installed. These are at least a month old."
+  },
+  {
+    "id": "macos-installers", "title": "macOS installers", "safety": "review", "action": "trash",
+    "paths": ["/Applications/Install macOS*.app"],
+    "why": "Full copies of macOS. You can download them again from Apple."
+  },
+  {
+    "id": "node-modules", "title": "node_modules in old projects", "safety": "review", "action": "trash",
+    "paths": ["~/**/node_modules"],
+    "olderThanDays": 90,
+    "why": "Project dependencies, unchanged for three months. Running npm install brings them back."
+  },
+  {
+    "id": "xcode-archives", "title": "Xcode archives", "safety": "review", "action": "trash",
+    "paths": ["~/Library/Developer/Xcode/Archives/*"],
+    "why": "Builds of your apps. Keep the ones you shipped, since they are needed to read crash reports."
+  },
+  {
+    "id": "simulators", "title": "Simulators", "safety": "review", "action": "command",
+    "paths": ["~/Library/Developer/CoreSimulator/Devices"],
+    "command": "xcrun simctl delete unavailable",
+    "why": "Removes the simulators for system versions no longer installed. The others stay."
+  },
+  {
+    "id": "android-emulators", "title": "Android emulators", "safety": "review", "action": "trash",
+    "paths": ["~/.android/avd/*"],
+    "why": "Virtual devices and their data. You can create them again in Android Studio."
+  },
+  {
+    "id": "docker", "title": "Docker", "safety": "review", "action": "command",
+    "paths": ["~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"],
+    "command": "docker system prune",
+    "why": "Removes stopped containers, unused networks and dangling images. Run docker system df first to see what takes up the space."
+  },
+  {
+    "id": "maven", "title": "Maven repository", "safety": "review", "action": "trash",
+    "paths": ["~/.m2/repository"],
+    "why": "Downloaded dependencies. Anything you installed there yourself would have to be built again."
+  },
+  {
+    "id": "huggingface", "title": "Hugging Face models", "safety": "review", "action": "trash",
+    "paths": ["~/.cache/huggingface/hub/*"],
+    "why": "Downloaded models. They can be large to download again."
+  },
+  {
+    "id": "ollama", "title": "Ollama models", "safety": "review", "action": "command",
+    "paths": ["~/.ollama/models"],
+    "command": "ollama list",
+    "why": "Downloaded models. The command lists them, and ollama rm removes the ones you no longer use."
+  },
+  {
+    "id": "vagrant", "title": "Vagrant boxes", "safety": "review", "action": "command",
+    "paths": ["~/.vagrant.d/boxes"],
+    "command": "vagrant box prune",
+    "why": "Removes old versions of the boxes you installed."
+  },
+  {
+    "id": "ios-backups", "title": "iPhone and iPad backups", "safety": "review", "action": "reveal",
+    "paths": ["~/Library/Application Support/MobileSync/Backup/*"],
+    "why": "These may be the only copy of what was on a device. Manage them in the Finder, with the device connected."
+  }
+]

@@ -15,6 +15,7 @@ expect listHidden=yes
 expect searchVisible=no
 expect toolbar=hidden
 expect mapColors=system
+expect listWidth=480
 expect banner=hidden
 expect-not tiles=0
 expect-disabled View > Zoom Out

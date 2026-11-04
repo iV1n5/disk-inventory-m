@@ -13,6 +13,8 @@ expect banner=shown
 
 # The volume test left the window at this size, in an earlier run of the app.
 expect windowSize=900x600
+# A second launch, and the list keeps its width in proportion to this smaller window.
+expect listWidth=377
 resize 1240 780
 wait 0.5
 snapshot {{OUT}}/11-privacy-banner.png

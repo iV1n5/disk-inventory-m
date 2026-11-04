@@ -33,6 +33,7 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
 
     private let outline = FilesOutlineController()
     private let kinds = KindsPanelController()
+    private let cleanup = CleanupPanelController()
     private let selectionList = SelectionListController()
     private let treemap: TreemapView
     private let pathControl = NSPathControl()
@@ -46,6 +47,11 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     private let contentSplit = NSSplitView()
     private let sideSplit = NSSplitView()
     private let bottomSplit = NSSplitView()
+    private let sidePane = NSView()
+    private var sidePanel = SidePanel.none
+    private var panesAreArranged = false
+    /// When set, the selection list shows what this suggestion found.
+    private var listSuggestion: CleanupSuggestion?
     private var infoPanel: InfoPanelController?
 
     init(path: String) {
@@ -69,10 +75,15 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         treemap.animatesZooming = UserDefaults.standard.bool(forKey: Preferences.animatedZooming)
         outline.delegate = self
         kinds.delegate = self
+        cleanup.delegate = self
         selectionList.delegate = self
 
         buildInterface(in: window)
         buildToolbar(in: window)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(contentSplitResized(_:)),
+            name: NSSplitView.didResizeSubviewsNotification, object: contentSplit
+        )
     }
 
     @available(*, unavailable)
@@ -105,15 +116,25 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
             treemap.bottomAnchor.constraint(equalTo: treemapPane.bottomAnchor),
         ])
 
-        configure(contentSplit, vertical: !UserDefaults.standard.bool(forKey: Preferences.splitHorizontally), name: "ContentSplit")
+        configure(contentSplit, vertical: !UserDefaults.standard.bool(forKey: Preferences.splitHorizontally))
         contentSplit.addArrangedSubview(outline.scrollView)
         contentSplit.addArrangedSubview(treemapPane)
         contentSplit.setHoldingPriority(NSLayoutConstraint.Priority(260), forSubviewAt: 0)
         contentSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
 
-        configure(sideSplit, vertical: true, name: "KindsSplit")
+        configure(sideSplit, vertical: true)
+        for panel in [kinds.scrollView, cleanup.view] as [NSView] {
+            panel.translatesAutoresizingMaskIntoConstraints = false
+            sidePane.addSubview(panel)
+            NSLayoutConstraint.activate([
+                panel.topAnchor.constraint(equalTo: sidePane.topAnchor),
+                panel.bottomAnchor.constraint(equalTo: sidePane.bottomAnchor),
+                panel.leadingAnchor.constraint(equalTo: sidePane.leadingAnchor),
+                panel.trailingAnchor.constraint(equalTo: sidePane.trailingAnchor),
+            ])
+        }
         sideSplit.addArrangedSubview(contentSplit)
-        sideSplit.addArrangedSubview(kinds.scrollView)
+        sideSplit.addArrangedSubview(sidePane)
         sideSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
         sideSplit.setHoldingPriority(NSLayoutConstraint.Priority(260), forSubviewAt: 1)
 
@@ -123,9 +144,9 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         bottomSplit.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
         bottomSplit.setHoldingPriority(NSLayoutConstraint.Priority(260), forSubviewAt: 1)
         selectionList.view.isHidden = true
-        kinds.scrollView.isHidden = !UserDefaults.standard.bool(forKey: Preferences.showKinds)
+        arrangeSidePane(for: Preferences.currentSidePanel)
 
-        for pane in [outline.scrollView, kinds.scrollView, treemapPane] as [NSView] {
+        for pane in [outline.scrollView, sidePane, treemapPane] as [NSView] {
             let width = pane.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
             width.priority = .defaultHigh
             let height = pane.heightAnchor.constraint(greaterThanOrEqualToConstant: 120)
@@ -183,7 +204,7 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         ])
     }
 
-    private func configure(_ split: NSSplitView, vertical: Bool, name: String) {
+    private func configure(_ split: NSSplitView, vertical: Bool, name: String? = nil) {
         split.isVertical = vertical
         split.dividerStyle = .thin
         split.autosaveName = name
@@ -224,26 +245,40 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         setBannerVisible(false)
     }
 
-    /// Gives the panes sensible sizes the first time around. From then on the split views restore
-    /// whatever arrangement the user left them in. (Checking for their saved state doesn't work:
-    /// they save it the moment they first lay out.)
-    private func applyInitialPaneSizes() {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Preferences.panesArranged) else { return }
-        defaults.set(true, forKey: Preferences.panesArranged)
+    /// Gives a new window's panes their sizes. Split views can't be left to save these themselves:
+    /// they overwrite what they saved while the window is still being put together, when everything
+    /// is at its smallest, and the list would come back at its minimum width from then on.
+    private func arrangePanes() {
+        guard !panesAreArranged else { return }
+        panesAreArranged = true
         window?.contentView?.layoutSubtreeIfNeeded()
-        if !kinds.scrollView.isHidden { sizeKindsPanel() }
-        contentSplit.setPosition(contentSplit.isVertical ? 400 : 260, ofDividerAt: 0)
+        if !sidePane.isHidden { sizeSidePane() }
+        let saved = CGFloat(UserDefaults.standard.double(forKey: Preferences.listWidth))
+        let listWidth = saved > 0 ? saved : min(480, contentSplit.bounds.width * 0.42)
+        contentSplit.setPosition(contentSplit.isVertical ? listWidth : 260, ofDividerAt: 0)
     }
 
-    private func sizeKindsPanel() {
+    /// Remembers the width of the list when someone drags its divider, and only then.
+    @objc private func contentSplitResized(_ notification: Notification) {
+        guard panesAreArranged, contentSplit.isVertical, NSApp.currentEvent?.type == .leftMouseDragged else { return }
+        UserDefaults.standard.set(Double(outline.scrollView.frame.width), forKey: Preferences.listWidth)
+    }
+
+    private func sizeSidePane() {
         sideSplit.setPosition(sideSplit.bounds.width - 330, ofDividerAt: 0)
+    }
+
+    private func arrangeSidePane(for panel: SidePanel) {
+        sidePanel = panel
+        kinds.scrollView.isHidden = panel != .kinds
+        cleanup.view.isHidden = panel != .cleanup
+        sidePane.isHidden = panel == .none
     }
 
     // MARK: Scanning
 
     func startScan() {
-        applyInitialPaneSizes()
+        arrangePanes()
         let newScanner: DiskScanner
         do {
             newScanner = try DiskScanner(path: requestedPath)
@@ -326,6 +361,7 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
         zoomHistory = []
         selection = nil
         hovered = nil
+        listSuggestion = nil
         treemap.selectedNode = nil
         treemap.highlightedKind = nil
         window?.representedURL = URL(fileURLWithPath: newTree.rootPath)
@@ -361,6 +397,20 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
                 self.selectionList.setKinds(statistics, table: tree.kindTable, selected: self.listKind)
                 self.reloadSelectionList()
                 self.updateTotals()
+                if self.sidePanel == .cleanup { self.refreshCleanup() }
+            }
+        }
+    }
+
+    private func refreshCleanup() {
+        guard let tree else { return }
+        let options = self.options
+        let context = Cleanup.context
+        work.async { [weak self] in
+            let suggestions = tree.cleanupSuggestions(rules: Cleanup.rules, context: context, options: options)
+            Task { @MainActor [weak self] in
+                guard let self, self.tree === tree else { return }
+                self.cleanup.show(suggestions)
             }
         }
     }
@@ -536,47 +586,64 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc func moveToTrash(_ sender: Any?) {
-        guard let tree, let node = selection, canTrashSelection, let path = selectedPath else { return }
-        let url = URL(fileURLWithPath: path)
+        guard let node = selection, canTrashSelection else { return }
+        trash([node])
+    }
+
+    /// Goes through the items one by one, since any of them can fail on its own.
+    private func trash(_ nodes: [NodeID]) {
+        guard let tree, !isBusy else { return }
+        let items = nodes.map { (node: $0, url: URL(fileURLWithPath: tree.path(of: $0))) }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let result = Result { try FileManager.default.trashItem(at: url, resultingItemURL: nil) }
-            Task { @MainActor [weak self] in
-                guard let self, self.tree === tree else { return }
-                switch result {
-                case .success:
-                    self.removeFromDisplay(node)
-                case .failure(let error):
-                    self.showTrashFailure(error, name: url.lastPathComponent)
+            var removed: [NodeID] = []
+            var failures: [(name: String, error: any Error)] = []
+            for item in items {
+                do {
+                    try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
+                    removed.append(item.node)
+                } catch {
+                    failures.append((item.url.lastPathComponent, error))
                 }
+            }
+            Task { @MainActor [weak self, removed, failures] in
+                guard let self, self.tree === tree else { return }
+                self.removeFromDisplay(removed)
+                self.showTrashFailures(failures)
             }
         }
     }
 
-    private func removeFromDisplay(_ node: NodeID) {
-        guard let tree else { return }
-        let parent = tree.node(node).parent
+    private func removeFromDisplay(_ removed: [NodeID]) {
+        guard let tree, let first = removed.first else { return }
+        let parent = tree.node(first).parent
         work.sync {
-            tree.remove(node)
+            for node in removed { tree.remove(node) }
             tree.updateVolumeSpace()
         }
-        // A search can select a folder that the current view is inside of.
-        if tree.ancestry(of: zoomRoot).contains(node) {
-            zoomRoot = parent
-            pruneZoomHistory()
+        for node in removed {
+            // A search can select a folder that the current view is inside of.
+            if tree.ancestry(of: zoomRoot).contains(node) {
+                zoomRoot = tree.node(node).parent
+                pruneZoomHistory()
+            }
+            selectionList.removeRow(node)
         }
-        selectionList.removeRow(node)
         hovered = nil
         selection = nil
+        listSuggestion = nil
         showContent(transition: .none)
         treemap.invalidateLayout()
-        select(parent == zoomRoot ? nil : parent, from: .program)
+        select(removed.count > 1 || parent == zoomRoot ? nil : parent, from: .program)
         refreshStatistics()
     }
 
-    private func showTrashFailure(_ error: any Error, name: String) {
+    private func showTrashFailures(_ failures: [(name: String, error: any Error)]) {
+        guard let first = failures.first else { return }
         let alert = NSAlert()
-        alert.messageText = "“\(name)” could not be moved to the Trash."
-        alert.informativeText = error.localizedDescription
+        alert.messageText = failures.count == 1
+            ? "“\(first.name)” could not be moved to the Trash."
+            : "\(Format.count(UInt64(failures.count))) items could not be moved to the Trash."
+        alert.informativeText = first.error.localizedDescription
         alert.alertStyle = .warning
         if let window { alert.beginSheetModal(for: window) }
     }
@@ -691,14 +758,23 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc func toggleKinds(_ sender: Any?) {
-        kinds.scrollView.isHidden.toggle()
+        toggle(.kinds)
+    }
+
+    @objc func toggleCleanup(_ sender: Any?) {
+        toggle(.cleanup)
+    }
+
+    /// The panels share their place, so showing one puts away the other.
+    private func toggle(_ panel: SidePanel) {
+        arrangeSidePane(for: sidePanel == panel ? .none : panel)
         sideSplit.adjustSubviews()
-        let isShown = !kinds.scrollView.isHidden
-        UserDefaults.standard.set(isShown, forKey: Preferences.showKinds)
-        if isShown {
+        UserDefaults.standard.set(sidePanel.rawValue, forKey: Preferences.sidePanel)
+        if sidePanel != .none {
             window?.contentView?.layoutSubtreeIfNeeded()
-            if kinds.scrollView.frame.width < 300 { sizeKindsPanel() }
+            if sidePane.frame.width < 300 { sizeSidePane() }
         }
+        if sidePanel == .cleanup { refreshCleanup() }
     }
 
     @objc func toggleToolbar(_ sender: Any?) {
@@ -733,6 +809,12 @@ final class ScanWindowController: NSWindowController, NSWindowDelegate {
     private func reloadSelectionList() {
         guard let tree, !selectionList.view.isHidden else { return }
         let options = self.options
+        if let listSuggestion {
+            let total = Format.items(UInt64(listSuggestion.nodes.count), "item", "items")
+            selectionList.show(rows: listSuggestion.nodes, total: "\(total) in “\(listSuggestion.rule.title)”", tree: tree, options: options)
+            selectionList.select(selection)
+            return
+        }
         let kind = listKind
         let query = listQuery
         let limit = 5000
@@ -819,7 +901,8 @@ extension ScanWindowController: NSMenuItemValidation, NSToolbarItemValidation {
         case #selector(toggleOtherSpace(_:)): item.state = options.showOtherSpace ? .on : .off
         case #selector(toggleSizeMode(_:)): item.state = options.sizeMode == .physical ? .on : .off
         case #selector(toggleSplitDirection(_:)): item.state = contentSplit.isVertical ? .off : .on
-        case #selector(toggleKinds(_:)): item.state = kinds.scrollView.isHidden ? .off : .on
+        case #selector(toggleKinds(_:)): item.state = sidePanel == .kinds ? .on : .off
+        case #selector(toggleCleanup(_:)): item.state = sidePanel == .cleanup ? .on : .off
         case #selector(toggleSelectionList(_:)): item.state = selectionList.view.isHidden ? .off : .on
         case #selector(toggleInformation(_:)): item.state = infoPanel?.window?.isVisible == true ? .on : .off
         case #selector(toggleToolbar(_:)): item.title = window?.toolbar?.isVisible == true ? "Hide Toolbar" : "Show Toolbar"
@@ -844,6 +927,7 @@ extension ScanWindowController: NSToolbarDelegate {
         static let trash = NSToolbarItem.Identifier("trash")
         static let refresh = NSToolbarItem.Identifier("refresh")
         static let kinds = NSToolbarItem.Identifier("kinds")
+        static let cleanup = NSToolbarItem.Identifier("cleanup")
         static let list = NSToolbarItem.Identifier("list")
         static let info = NSToolbarItem.Identifier("info")
     }
@@ -862,7 +946,7 @@ extension ScanWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             Item.zoomOut, Item.zoomIn, .space, Item.reveal, Item.quickLook, Item.trash, Item.refresh,
-            .flexibleSpace, Item.list, Item.kinds, Item.info,
+            .flexibleSpace, Item.list, Item.kinds, Item.cleanup, Item.info,
         ]
     }
 
@@ -890,6 +974,7 @@ extension ScanWindowController: NSToolbarDelegate {
         case Item.refresh: return button("Refresh", "arrow.clockwise", #selector(refresh(_:)), "Scan the selected folder again, or everything if nothing is selected")
         case Item.list: return button("Selection List", "list.bullet.rectangle", #selector(toggleSelectionList(_:)), "Show or hide the list of files")
         case Item.kinds: return button("Kinds", "chart.pie", #selector(toggleKinds(_:)), "Show or hide the file kind statistics")
+        case Item.cleanup: return button("Cleanup", "sparkles", #selector(toggleCleanup(_:)), "Show or hide suggestions for freeing up space")
         case Item.info: return button("Information", "info.circle", #selector(toggleInformation(_:)), "Show or hide details of the selected item")
         default: return nil
         }
@@ -949,6 +1034,7 @@ extension ScanWindowController: KindsPanelDelegate {
     func kindsPanelShowFiles(of kind: KindID) {
         listKind = kind
         listQuery = ""
+        listSuggestion = nil
         selectionList.searchField.stringValue = ""
         if let tree { selectionList.setKinds(statistics, table: tree.kindTable, selected: kind) }
         if selectionList.view.isHidden {
@@ -967,17 +1053,55 @@ extension ScanWindowController: SelectionListDelegate {
     func selectionList(didChooseKind kind: KindID?) {
         listKind = kind
         listQuery = ""
+        listSuggestion = nil
         selectionList.searchField.stringValue = ""
         reloadSelectionList()
     }
 
     func selectionList(didSearchFor query: String) {
         listQuery = query
+        listSuggestion = nil
         reloadSelectionList()
     }
 
     func selectionListMenu() -> NSMenu? {
         makeContextMenu()
+    }
+}
+
+extension ScanWindowController: CleanupPanelDelegate {
+    func cleanupPanel(didSelect suggestion: CleanupSuggestion) {
+        guard let tree, let node = suggestion.nodes.first else { return }
+        if !tree.ancestry(of: node).contains(zoomRoot) { zoomOut(to: tree.root) }
+        select(node, from: .program)
+    }
+
+    func cleanupPanelMoveToTrash(_ suggestion: CleanupSuggestion) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Move “\(suggestion.rule.title)” to the Trash?"
+        let items = Format.items(UInt64(suggestion.nodes.count), "item", "items")
+        alert.informativeText = "\(items), \(Format.bytes(suggestion.bytes)). \(suggestion.rule.why)"
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            MainActor.assumeIsolated { self?.trash(suggestion.nodes) }
+        }
+    }
+
+    func cleanupPanelReveal(_ suggestion: CleanupSuggestion) {
+        guard let tree else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(suggestion.nodes.map { URL(fileURLWithPath: tree.path(of: $0)) })
+    }
+
+    func cleanupPanelShowInList(_ suggestion: CleanupSuggestion) {
+        listSuggestion = suggestion
+        if selectionList.view.isHidden {
+            toggleSelectionList(nil)
+        } else {
+            reloadSelectionList()
+        }
     }
 }
 
@@ -1022,6 +1146,8 @@ extension ScanWindowController: QLPreviewPanelDataSource {
 extension ScanWindowController {
     var uiTreemap: TreemapView? { treemap }
     var uiPathControl: NSPathControl? { pathControl }
+    var uiContentSplit: NSSplitView { contentSplit }
+    var uiList: NSView { outline.scrollView }
 
     /// What the tests can observe.
     var uiState: [String: String] {
@@ -1040,7 +1166,11 @@ extension ScanWindowController {
         state["totals"] = statusTotals.stringValue.replacingOccurrences(of: " ", with: "_")
         state["highlightedKind"] = treemap.highlightedKind.map { "\($0)" } ?? "none"
         state["listHidden"] = selectionList.view.isHidden ? "yes" : "no"
-        state["kindsHidden"] = kinds.scrollView.isHidden ? "yes" : "no"
+        state["kindsHidden"] = sidePanel == .kinds ? "no" : "yes"
+        state["sidePanel"] = sidePanel.rawValue
+        state["cleanupRows"] = "\(cleanup.uiRowCount)"
+        state["cleanupCommand"] = (cleanup.selected?.rule.command ?? "none").replacingOccurrences(of: " ", with: "_")
+        state["cleanupAction"] = cleanup.uiActionTitle.replacingOccurrences(of: " ", with: "_")
         state["physical"] = options.sizeMode == .physical ? "yes" : "no"
         state["packages"] = options.showPackageContents ? "yes" : "no"
         state["rootSize"] = "\(tree.size(of: tree.root, options.sizeMode))"
@@ -1055,6 +1185,7 @@ extension ScanWindowController {
         state["mapColors"] = Preferences.currentMapColors.rawValue
         state["kindColors"] = treemap.uiColorSummary
         state["outline"] = treemap.uiOutline
+        state["listWidth"] = "\(Int(outline.scrollView.frame.width))"
         state["banner"] = banner.isHidden ? "hidden" : "shown"
         state["infoVisible"] = infoPanel?.window?.isVisible == true ? "yes" : "no"
         state["firstRow"] = uiFirstOutlineRow
@@ -1111,6 +1242,15 @@ extension ScanWindowController {
 
     func uiSelectOutlineRow(_ row: Int) {
         outline.outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
+    func uiSelectCleanup(_ position: Int) {
+        cleanup.uiSelect(position)
+    }
+
+    /// Skips the question, which would wait for someone to answer it.
+    func uiTrashCleanup() {
+        if let suggestion = cleanup.selected { trash(suggestion.nodes) }
     }
 
     func uiSelectKindRow(_ row: Int) {
