@@ -98,6 +98,8 @@ public enum MapColors: String, Sendable, CaseIterable {
     case system
     /// By what files are: video is blue on every disk.
     case families
+    /// Deep tones, from the largest kind down. They suit a dark window best.
+    case gems
 }
 
 /// The colours kinds are drawn in.
@@ -118,12 +120,31 @@ public enum KindPalette {
         0x0A84FF, 0xFF9F0A, 0x30D158, 0x5E5CE6, 0xFFD60A, 0xFF375F,
         0x40C8E0, 0xBF5AF2, 0x66D4CF, 0xFF453A, 0xAC8E68, 0x64D2FF,
     ]
+    private static let gemColors: [UInt32] = [
+        0x2867E4, 0xE19B1B, 0x009A60, 0xDB2A3D, 0x00ADBB, 0x8E47CD,
+        0xD3BF46, 0xD43B86, 0x5349B9, 0xE77140, 0x2DA892, 0x93398E,
+    ]
     private static let remaining: UInt32 = 0x77777D
+    private static let remainingGem: UInt32 = 0x54585F
     private static let freeSpace: UInt32 = 0xB3B3AD
     private static let otherSpace: UInt32 = 0x525257
 
     private static func color(_ hex: UInt32) -> SIMD4<Float> {
         SIMD4(Float((hex >> 16) & 255) / 255, Float((hex >> 8) & 255) / 255, Float(hex & 255) / 255, 1)
+    }
+
+    /// The largest kinds get a colour each, and all the others share one.
+    private static func byRank(
+        _ shown: [KindStatistic],
+        _ palette: [UInt32],
+        rest: UInt32,
+        table: KindTable
+    ) -> [SIMD4<Float>] {
+        var colors = [SIMD4<Float>](repeating: color(rest), count: table.kinds.count)
+        for (statistic, hex) in zip(shown, palette) {
+            colors[Int(statistic.kind)] = color(hex)
+        }
+        return colors
     }
 
     /// A colour for every kind of the table, given the kinds sorted by importance.
@@ -147,10 +168,9 @@ public enum KindPalette {
                 used[family] = step + 1
             }
         case .system:
-            colors = [SIMD4<Float>](repeating: color(remaining), count: table.kinds.count)
-            for (statistic, hex) in zip(shown, systemColors) {
-                colors[Int(statistic.kind)] = color(hex)
-            }
+            colors = byRank(shown, systemColors, rest: remaining, table: table)
+        case .gems:
+            colors = byRank(shown, gemColors, rest: remainingGem, table: table)
         }
         colors[Int(table.freeSpace)] = color(freeSpace)
         colors[Int(table.otherSpace)] = color(otherSpace)

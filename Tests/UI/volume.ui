@@ -98,6 +98,12 @@ expect mapColors=families
 expect-changed kindColors
 expect-same tiles
 snapshot {{OUT}}/03c-family-colors.png
+menu View > Map Colors > Gems
+wait 0.3
+expect mapColors=gems
+expect-changed kindColors
+expect-same tiles
+snapshot {{OUT}}/03d-gem-colors.png
 menu View > Map Colors > System
 wait 0.3
 expect mapColors=system

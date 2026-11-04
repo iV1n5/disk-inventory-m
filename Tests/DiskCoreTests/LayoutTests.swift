@@ -274,14 +274,15 @@ import TreemapMetal
 }
 
 @Suite struct PaletteTests {
-    @Test func systemColorsGoToTheLargestKindsAndTheRestIsGrey() throws {
+    @Test(arguments: [MapColors.system, .gems])
+    func colorsByRankGoToTheLargestKindsAndTheRestShareOne(scheme: MapColors) throws {
         let folder = try TemporaryFolder()
         for index in 0..<16 {
             try folder.write("file.ext\(Character(UnicodeScalar(UInt8(97 + index))))", bytes: (index + 1) * 10_000)
         }
         let tree = try DiskScanner(path: folder.path).run()
         let statistics = tree.kindStatistics(DisplayOptions())
-        let colors = KindPalette.colors(for: statistics, table: tree.kindTable, scheme: .system)
+        let colors = KindPalette.colors(for: statistics, table: tree.kindTable, scheme: scheme)
 
         #expect(statistics.count == 16)
         let shades = statistics.map { colors[Int($0.kind)] }

@@ -71,10 +71,11 @@ The keyboard shortcuts follow the original where it had them. The window starts 
 folders and the map: the toolbar, the kinds panel, free space and other space are all in the View
 menu.
 
-There are two sets of colours. System uses macOS's own colours, from the largest kind of file down.
-With Families, a colour says what a file is, and it stays the same on every disk: blue for video,
-green for images, purple for audio, orange for archives and disk images, pink for applications,
-yellow for documents and slate for everything else.
+There are three sets of colours. System uses macOS's own colours, from the largest kind of file
+down, and Gems does the same with deeper tones that suit a dark window. With Families, a colour says
+what a file is, and it stays the same on every disk: blue for video, green for images, purple for
+audio, orange for archives and disk images, pink for applications, yellow for documents and slate
+for everything else.
 
 ## Cleaning up
 

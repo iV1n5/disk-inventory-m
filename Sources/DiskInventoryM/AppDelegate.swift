@@ -283,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func mapColorsItem() -> NSMenuItem {
         let choices = NSMenu()
-        for (title, scheme) in [("System", MapColors.system), ("Families", MapColors.families)] {
+        for (title, scheme) in [("System", MapColors.system), ("Families", .families), ("Gems", .gems)] {
             let choice = item(title, #selector(chooseMapColors(_:)), target: self)
             choice.representedObject = scheme.rawValue
             choices.addItem(choice)
