@@ -229,8 +229,7 @@ import TreemapMetal
         #expect(center.b > 200)
         #expect(center.r > corner.r, "the highlight washes out towards white, most of all in the middle")
         #expect(center.r < 64, "gently: the colour stays recognisable")
-        let outside = pixel(image, x: 0, y: 0)
-        #expect(outside.b < 40, "a large tile has rounded corners, with the background showing")
+        #expect(pixel(image, x: 0, y: 100).b < pixel(image, x: 2, y: 100).b, "a large tile stands apart from what is next to it")
     }
 
     @Test func smallTilesGoWithoutGapsAndRounding() throws {

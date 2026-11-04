@@ -12,7 +12,7 @@ public struct TreemapTile: Sendable {
 /// How pronounced the cushions look. See "Cushion Treemaps" (van Wijk, van de Wetering, 1999).
 public struct CushionParameters: Sendable {
     /// The ridge height of the outermost level.
-    public var height = 0.22
+    public var height = 0.16
     /// How much lower each deeper level's ridge is.
     public var falloff = 0.90
 

@@ -26,9 +26,9 @@ public final class TreemapRenderer: @unchecked Sendable {
         /// How much of the light past full colour turns into white.
         public var spill: Float = 0.25
         /// Space kept clear on each side of a tile, in points.
-        public var gap: Float = 0.5
+        public var gap: Float = 0.25
         /// How round the corners of a tile are, in points.
-        public var radius: Float = 2.5
+        public var radius: Float = 0
 
         public init() {}
     }
@@ -281,8 +281,8 @@ public final class TreemapRenderer: @unchecked Sendable {
         float excess = max(max(color.r, max(color.g, color.b)) - 1.0, 0.0);
         color = min(color + excess * uniforms.spill, 1.0);
 
-        // Large tiles stand apart, as rounded tiles with a gap between them. Small ones lose both
-        // gradually, or a folder of thousands of files would turn into a field of dark dots.
+        // Large tiles stand apart, with a gap between them and any rounding of their corners. Small
+        // ones lose both gradually, or a folder of thousands of files would turn into dark dots.
         float shortest = min(in.size.x, in.size.y);
         float gap = uniforms.gap * smoothstep(10.0, 30.0, shortest / max(uniforms.gap, 0.001));
         float radius = uniforms.radius * smoothstep(2.8, 8.8, shortest / max(uniforms.radius, 0.001));

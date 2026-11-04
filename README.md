@@ -101,7 +101,7 @@ Your own documents, photos, mail and the system are never suggested. The suggest
 | Scanner | `Sources/DiskCore/DiskScanner.swift` | Reads directories with `getattrlistbulk(2)` on all cores. Counts hard links once and stops at mount points. |
 | File tree | `Sources/DiskCore/FileTree.swift` | 48 bytes per file in flat arenas, addressed by index. Nothing moves, and there is no reference counting per file. |
 | Treemap layout | `Sources/DiskCore/TreemapLayout.swift` | Squarified layout (Bruls, Huizing, van Wijk). Merges anything below a pixel, so its cost follows the pixels on screen rather than the number of files. |
-| Rendering | `Sources/TreemapMetal/TreemapRenderer.swift` | Cushion shading (van Wijk, van de Wetering) in a Metal fragment shader, which also rounds large tiles and sets them apart. The shader compiles at launch, so no Metal toolchain is needed to build. |
+| Rendering | `Sources/TreemapMetal/TreemapRenderer.swift` | Cushion shading (van Wijk, van de Wetering) in a Metal fragment shader, which also sets large tiles apart. The shader compiles at launch, so no Metal toolchain is needed to build. |
 | Interface | `Sources/DiskInventoryM/` | AppKit, written in code. `NSOutlineView` copes with folders of any size. |
 | Cleanup | `Sources/DiskCore/Cleanup.swift` | Matches the rules in `Resources/CleanupRules.json` against the tree already in memory, so it reads nothing from disk. |
 | `dim` | `Sources/dim/` | Command line companion: `dim scan <path>`, `dim render <path> <out.png>`. |
